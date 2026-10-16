@@ -1,0 +1,12 @@
+As this is a pyhton setup, need to make sure we hhave python involved in the local setup. Download the latest pyhton version from the web.
+Use the below commands to verify
+
+python --version
+where.exe python
+Test-Path "Your installation Path"
+
+Now to setup in local
+  python -m venv .venv
+  Test-Path ".venv\Scripts\python.exe"
+  .\.venv\Scripts\python.exe -m pip install -r requirements.txt
+  .\.venv\Scripts\python.exe app.py
