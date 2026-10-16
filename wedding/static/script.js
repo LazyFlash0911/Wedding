@@ -10,10 +10,19 @@
 
   // Language toggle: elements carry their Hindi text in data-hi attributes.
   const STRINGS = {
-    en: { musicOn: "Music on", musicOff: "Music off", turnMusicOn: "Turn music on", turnMusicOff: "Turn music off", otherLanguage: "हिंदी", opened: "Your invitation is open" },
-    hi: { musicOn: "संगीत चालू", musicOff: "संगीत बंद", turnMusicOn: "संगीत चालू करें", turnMusicOff: "संगीत बंद करें", otherLanguage: "English", opened: "आपका निमंत्रण खुल गया है" },
+    en: {
+      musicOn: "Music on", musicOff: "Music off", turnMusicOn: "Turn music on", turnMusicOff: "Turn music off",
+      otherLanguage: "हिंदी", otherLanguageLong: "हिंदी में पढ़ें", opened: "Your invitation is open",
+      today: "Today", now: "Happening now", completed: "Completed", linkCopied: "Link copied. Paste it in WhatsApp to share.",
+    },
+    hi: {
+      musicOn: "संगीत चालू", musicOff: "संगीत बंद", turnMusicOn: "संगीत चालू करें", turnMusicOff: "संगीत बंद करें",
+      otherLanguage: "English", otherLanguageLong: "Read in English", opened: "आपका निमंत्रण खुल गया है",
+      today: "आज", now: "अभी चल रहा है", completed: "संपन्न", linkCopied: "लिंक कॉपी हो गया। साझा करने के लिए व्हाट्सऐप में पेस्ट करें।",
+    },
   };
-  let lang = local.get("lang") === "hi" ? "hi" : "en";
+  const savedLang = local.get("lang");
+  let lang = savedLang === "hi" || (!savedLang && /^hi\b/i.test(navigator.language || "")) ? "hi" : "en";
   const t = (key) => STRINGS[lang][key];
   const languageListeners = [];
   const englishTitle = document.title;
@@ -32,7 +41,9 @@
     swap("[data-hi-placeholder]", "hiPlaceholder", "enPlaceholder", (el) => el.placeholder, (el, value) => { el.placeholder = value; });
     swap("[data-hi-aria-label]", "hiAriaLabel", "enAriaLabel", (el) => el.getAttribute("aria-label") || "", (el, value) => el.setAttribute("aria-label", value));
     document.title = lang === "hi" ? root.dataset.titleHi : englishTitle;
-    document.querySelectorAll(".lang-toggle").forEach((button) => { button.textContent = t("otherLanguage"); });
+    document.querySelectorAll(".lang-toggle").forEach((button) => {
+      button.textContent = button.classList.contains("intro-lang") ? t("otherLanguageLong") : t("otherLanguage");
+    });
     languageListeners.forEach((listener) => listener());
   }
 
@@ -171,6 +182,111 @@
     timer = window.setInterval(updateCountdown, 1000);
   }
 
+  // "Add to calendar": iPhones and Macs open the .ics file in Apple Calendar; everyone else gets Google Calendar.
+  const isApple = /iPhone|iPad|iPod|Macintosh/.test(navigator.userAgent) && !/Android/.test(navigator.userAgent);
+  if (isApple) {
+    document.querySelectorAll(".calendar-link[data-ics]").forEach((link) => {
+      link.href = link.dataset.ics;
+      link.removeAttribute("target");
+    });
+  }
+
+  // Event-day status: "Today" / "Happening now" badges, and a banner at the top of the page.
+  const eventCards = Array.from(document.querySelectorAll(".event-card[data-start]"));
+  const todayBanner = document.getElementById("today-banner");
+  const istDate = (time) => new Date(time).toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" });
+
+  function updateEventStatus() {
+    const now = Date.now();
+    let bannerEvent = null;
+    eventCards.forEach((card) => {
+      const start = new Date(card.dataset.start).getTime();
+      const end = new Date(card.dataset.end).getTime();
+      const status = card.querySelector(".event-status");
+      let label = "";
+      if (now >= start && now < end) label = "now";
+      else if (now < start && istDate(now) === istDate(start)) label = "today";
+      else if (now >= end) label = "completed";
+      card.classList.toggle("is-live", label === "now" || label === "today");
+      card.classList.toggle("is-past", label === "completed");
+      status.hidden = !label;
+      status.textContent = label ? t(label) : "";
+      if (!bannerEvent && (label === "now" || label === "today")) bannerEvent = { card, label };
+    });
+
+    if (!todayBanner) return;
+    todayBanner.hidden = !bannerEvent;
+    if (!bannerEvent) return;
+    const { card, label } = bannerEvent;
+    const venue = card.querySelector(".event-details dd b");
+    todayBanner.href = `#${card.id}`;
+    document.getElementById("today-badge").textContent = t(label);
+    document.getElementById("today-name").textContent = card.querySelector("h4").textContent;
+    document.getElementById("today-detail").textContent =
+      `${card.querySelector(".event-time").textContent} · ${venue ? venue.textContent : ""}`;
+  }
+
+  if (eventCards.length) {
+    updateEventStatus();
+    window.setInterval(updateEventStatus, 60000);
+    languageListeners.push(updateEventStatus);
+  }
+
+  // Share: the phone's share sheet where available, otherwise WhatsApp, otherwise copy the link.
+  const shareData = JSON.parse(document.getElementById("share-data")?.textContent || "{}");
+  const toast = document.getElementById("toast");
+  let toastTimer = null;
+
+  function showToast(message) {
+    if (!toast) return;
+    toast.textContent = message;
+    toast.hidden = false;
+    window.clearTimeout(toastTimer);
+    toastTimer = window.setTimeout(() => { toast.hidden = true; }, 3500);
+  }
+
+  async function shareInvitation() {
+    const text = shareData[lang] || shareData.en;
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: shareData.title, text, url: shareData.url });
+        return;
+      } catch (error) {
+        if (error.name === "AbortError") return; // The guest closed the share sheet.
+      }
+    }
+    if (/Android|iPhone|iPad|iPod/.test(navigator.userAgent)) {
+      window.location.href = `https://wa.me/?text=${encodeURIComponent(`${text} ${shareData.url}`)}`;
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(`${text} ${shareData.url}`);
+      showToast(t("linkCopied"));
+    } catch (error) {
+      window.open(`https://wa.me/?text=${encodeURIComponent(`${text} ${shareData.url}`)}`, "_blank", "noopener");
+    }
+  }
+
+  document.querySelectorAll(".share-button").forEach((button) => button.addEventListener("click", shareInvitation));
+
+  // Highlight the bottom-bar item for the section on screen.
+  const bottomLinks = Array.from(document.querySelectorAll(".bottom-nav a[data-section]"));
+  if (bottomLinks.length) {
+    const sectionIds = { celebrations: "celebrations", "getting-there": "getting-there", memories: "memories", photos: "memories", wishes: "wishes" };
+    const sections = Array.from(document.querySelectorAll("main > section[id]"));
+    const updateActive = () => {
+      const middle = window.innerHeight / 2;
+      const current = sections.find((section) => {
+        const rect = section.getBoundingClientRect();
+        return rect.top <= middle && rect.bottom > middle;
+      });
+      const active = current ? sectionIds[current.id] : null;
+      bottomLinks.forEach((link) => link.classList.toggle("active", link.dataset.section === active));
+    };
+    window.addEventListener("scroll", updateActive, { passive: true });
+    updateActive();
+  }
+
   // Full-screen photo viewer with keyboard and swipe support.
   const lightbox = document.getElementById("lightbox");
   const lightboxImage = document.getElementById("lightbox-image");
@@ -191,6 +307,8 @@
     lightboxImage.alt = captionFor(item);
     lightboxCaption.textContent = captionFor(item);
     lightboxPrev.hidden = lightboxNext.hidden = lightboxItems.length < 2;
+    document.getElementById("lightbox-count").textContent =
+      lightboxItems.length > 1 ? `${lightboxIndex + 1} / ${lightboxItems.length}` : "";
   }
 
   function openLightbox(items, index, trigger) {

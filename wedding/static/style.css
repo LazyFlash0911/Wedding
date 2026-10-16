@@ -288,6 +288,26 @@ footer small { color: #d9e0d4; font-size: .78rem; }
 .lightbox-next { grid-column: 3; }
 .lightbox-figure { grid-column: 2; grid-row: 1; }
 
+.lightbox-count { color: rgba(244,233,223,.7); font-size: .8rem; letter-spacing: .1em; }
+
+/* ---------- Event-day status ---------- */
+.today-banner { display: flex; align-items: center; gap: 14px; padding: 14px clamp(16px, 4vw, 60px); background: var(--rose); color: #fff; text-decoration: none; }
+.today-badge { flex: none; padding: 4px 10px; border-radius: 20px; background: rgba(255,255,255,.2); font-size: .74rem; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; animation: pulse 2s ease-in-out infinite; }
+.today-text { display: flex; flex: 1; flex-direction: column; min-width: 0; }
+.today-text b { font: 500 1.15rem var(--font-serif); }
+.today-text small { opacity: .9; font-size: .84rem; }
+.today-arrow { font-size: 1.3rem; }
+.event-status { position: absolute; top: 18px; right: 18px; padding: 4px 11px; border-radius: 20px; background: var(--accent-soft); color: var(--accent); font-size: .72rem; font-weight: 700; letter-spacing: .05em; }
+.event-card.is-live { box-shadow: 0 0 0 3px var(--accent-soft), 0 18px 40px rgba(83,62,53,.14); }
+.event-card.is-live .event-status { background: var(--accent); color: #fff; }
+.event-card.is-past { opacity: .72; }
+
+/* ---------- Share, toast and phone bottom bar ---------- */
+.footer-share { display: inline-flex; align-items: center; gap: 8px; margin-top: 22px; padding: 12px 22px; border: 1px solid rgba(255,250,245,.45); border-radius: 30px; background: transparent; color: #fffaf5; cursor: pointer; font-size: .92rem; }
+.footer-share:hover { background: rgba(255,250,245,.12); }
+.toast { position: fixed; left: 50%; bottom: calc(90px + env(safe-area-inset-bottom)); z-index: 90; width: max-content; max-width: calc(100% - 32px); padding: 12px 18px; border-radius: 12px; background: var(--ink); color: #fffaf5; font-size: .9rem; text-align: center; transform: translateX(-50%); box-shadow: 0 10px 30px rgba(0,0,0,.2); }
+.bottom-nav { display: none; }
+
 /* ---------- Petals ---------- */
 .petal-layer { position: fixed; inset: 0; z-index: 70; overflow: hidden; pointer-events: none; }
 .petal { position: absolute; top: -35px; color: #c57f8b; opacity: .7; animation: fall linear forwards; }
@@ -328,41 +348,111 @@ footer small { color: #d9e0d4; font-size: .78rem; }
   .venue-grid, .album-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .family-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
+@media (max-width: 760px) {
+  /* Bottom bar: the main destinations within thumb reach. */
+  body { padding-bottom: calc(66px + env(safe-area-inset-bottom)); }
+  .bottom-nav { position: fixed; left: 0; right: 0; bottom: 0; z-index: 45; display: grid; grid-template-columns: repeat(5, 1fr); padding: 6px 4px calc(6px + env(safe-area-inset-bottom)); background: rgba(255,253,249,.97); border-top: 1px solid var(--line); box-shadow: 0 -8px 24px rgba(83,62,53,.08); backdrop-filter: blur(12px); }
+  .bottom-nav a, .bottom-nav button { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; min-height: 54px; padding: 4px 2px; border: 0; border-radius: 12px; background: none; color: var(--muted); font-size: .72rem; font-weight: 600; text-decoration: none; cursor: pointer; }
+  .bottom-nav svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+  .bottom-nav a.active { color: var(--rose); background: var(--rose-light); }
+  .bottom-nav .share-button { color: var(--sage-dark); }
+  html[lang="hi"] .bottom-nav a, html[lang="hi"] .bottom-nav button { font-size: .76rem; }
+  footer { padding-bottom: 40px; }
+}
 @media (max-width: 600px) {
-  .nav { gap: 10px; padding: 10px 16px; }
-  .brand { font-size: 1.2rem; }
-  .music-toggle { padding: 8px 10px; }
+  html { scroll-padding-top: 70px; }
+  .nav { gap: 8px; padding: 9px 14px; padding-left: max(14px, env(safe-area-inset-left)); padding-right: max(14px, env(safe-area-inset-right)); }
+  .brand { font-size: 1.25rem; }
+  .lang-toggle, .music-toggle { min-height: 40px; padding: 8px 13px; font-size: .82rem; }
   .music-toggle #music-label { display: none; }
-  .intro { padding: 64px 16px 40px; }
+  .nav-toggle { width: 42px; height: 42px; }
+  .nav-links a { padding: 15px 4px; font-size: 1.02rem; }
+
+  .intro { padding: 70px 18px 40px; }
+  .intro-lang { top: 14px; right: 14px; min-height: 40px; padding: 9px 16px; background: var(--white); box-shadow: 0 4px 14px rgba(83,62,53,.1); font-size: .86rem; }
   .intro h1 { font-size: clamp(3rem, 14vw, 4.5rem); }
+  .intro-text { font-size: 1rem; }
+  .intro .open-invite { min-height: 54px; padding: 15px 26px; font-size: 1.05rem; }
+  .tiny-note { font-size: .8rem; }
   .envelope-stage { min-height: 300px; }
   .envelope { height: 215px; }
   .envelope-flap { border-left-width: min(43vw, 170px); border-right-width: min(43vw, 170px); border-top-width: 125px; }
   .invitation-open .envelope-letter { transform: translateY(-95px) scale(1.04); }
   .letter-names { font-size: 1.7rem; }
-  .section { padding: 72px 16px; }
-  .section-kicker { font-size: .58rem; letter-spacing: .13em; gap: 7px; }
-  .ganesh-blessing { padding: 18px 12px; }
-  .ganesh-invocation { font-size: 1.1rem; }
-  .ganesh-shlok { font-size: .9rem; line-height: 2; }
-  .ganesh-meaning { font-size: .78rem; }
+
+  /* Readable text for every age: nothing below ~12px, body copy at 16px. */
+  .section { padding: 64px 18px; }
+  .section h2 { font-size: clamp(2.2rem, 10vw, 2.8rem); }
+  .section-kicker { font-size: .7rem; letter-spacing: .12em; gap: 8px; }
+  .eyebrow { font-size: .74rem; }
+  .body-copy { font-size: 1rem; line-height: 1.75; }
+  .ganesh-blessing { padding: 20px 14px; }
+  .ganesh-invocation { font-size: 1.2rem; }
+  .ganesh-shlok { font-size: 1rem; line-height: 2; }
+  .ganesh-meaning { font-size: .9rem; }
+  .handwritten { font-size: 1.9rem; }
+  .date-stamp b { font-size: .8rem; }
+  .date-stamp small { font-size: .72rem; }
   .countdown { gap: 6px; }
-  .countdown div { padding: 12px 2px; }
-  .countdown span { font-size: .56rem; letter-spacing: .06em; }
-  .timeline::before { left: 17px; }
-  .timeline-day { padding-left: 44px; }
-  .event-icon { left: -47px; width: 36px; height: 36px; font-size: 1rem; }
-  .event-details { grid-template-columns: 1fr; }
+  .countdown div { padding: 14px 2px; }
+  .countdown span { font-size: .68rem; letter-spacing: .04em; }
+
+  .timeline { margin-top: 40px; }
+  .timeline::before { left: 15px; }
+  .timeline-day { padding-left: 40px; }
+  .timeline-date { font-size: .8rem; letter-spacing: .1em; }
+  .event-card { padding: 22px 18px; }
+  .event-icon { left: -43px; width: 34px; height: 34px; font-size: .95rem; }
+  .event-time { font-size: .86rem; }
+  .event-card h4 { font-size: 1.9rem; padding-right: 20px; }
+  .event-subtitle { font-size: .95rem; }
+  .event-description { font-size: .98rem; line-height: 1.7; }
+  .event-details { grid-template-columns: 1fr; gap: 16px; }
+  .event-details dt { font-size: .72rem; }
+  .event-details dd { font-size: .98rem; }
+  .event-details dd small { font-size: .85rem; }
+  .event-actions { display: grid; grid-template-columns: 1fr 1fr; }
+  .pill-link { justify-content: center; min-height: 48px; padding: 10px 12px; font-size: .9rem; }
+  .event-status { top: 14px; right: 14px; }
+
+  .venue-card h3 { font-size: 2rem; }
+  .venue-address, .venue-tip { font-size: .95rem; }
+  .venue-buttons { display: grid; }
+  .venue-buttons a { justify-content: center; min-height: 50px; }
+  .venue-map, .venue-map iframe { min-height: 260px; }
+  .venue-mini-address { font-size: .88rem; }
+  .venue-mini-tip { font-size: .9rem; }
+  .venue-events li { font-size: .8rem; }
+  .text-link { min-height: 44px; align-items: center; font-size: .95rem; }
+
   .venue-grid, .album-grid, .family-grid { grid-template-columns: 1fr; }
-  .album-card { min-height: 170px; }
-  .gallery { grid-template-columns: minmax(0, 1fr); }
-  .gallery-arrow { display: none; }
-  .memory-card { padding: 10px 10px 16px; }
-  .photo-frame { height: 300px; }
-  .memory-caption h3 { font-size: 1.3rem; }
-  .lightbox { grid-template-columns: minmax(0, 1fr); padding: 60px 10px 20px; }
+  .family-relation { font-size: .82rem; }
+  .album-card { min-height: 150px; }
+  .album-link { font-size: .92rem; }
+
+  /* Carousel arrows sit over the photo so guests can see it moves. */
+  .gallery { position: relative; grid-template-columns: minmax(0, 1fr); }
+  .gallery-arrow { position: absolute; z-index: 2; top: 165px; width: 44px; height: 44px; background: rgba(255,253,249,.9); box-shadow: 0 4px 14px rgba(0,0,0,.15); }
+  .gallery-arrow:disabled { opacity: 0; pointer-events: none; }
+  #gallery-prev { left: 18px; }
+  #gallery-next { right: 18px; }
+  .memory-card { padding: 10px 10px 16px; transform: none; }
+  .photo-frame { height: 320px; }
+  .memory-caption h3 { font-size: 1.35rem; }
+  .memory-caption p { font-size: .95rem; }
+  .memory-index { font-size: .74rem; }
+
+  /* 16px fields stop iPhones zooming in when a guest taps to type. */
+  .wish-form input, .wish-form textarea { font-size: 16px; }
+  .wish-form label { font-size: .92rem; }
+  .wish-form .open-invite { justify-self: stretch; min-height: 52px; }
+  .wish-card blockquote { font-size: 1.05rem; }
+
+  .lightbox { grid-template-columns: minmax(0, 1fr); padding: 64px 10px 24px; }
   .lightbox-arrow { display: none; }
   .lightbox-figure { grid-column: 1; }
+  .lightbox-figure figcaption { font-size: 1rem; padding: 0 8px; }
+  .today-text b { font-size: 1.05rem; }
 }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }

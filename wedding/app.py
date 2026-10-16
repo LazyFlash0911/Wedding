@@ -311,6 +311,23 @@ def share_image(filename):
     return f"generated/{target.name}"
 
 
+def touch_icon(filename):
+    """A square icon for phones' home screens and bookmarks."""
+    source = IMAGE_FOLDER / filename
+    target = GENERATED_FOLDER / "touch-icon.png"
+    try:
+        if not target.is_file() or target.stat().st_mtime < source.stat().st_mtime:
+            GENERATED_FOLDER.mkdir(exist_ok=True)
+            with Image.open(source) as image:
+                image.draft("RGB", (720, 720))
+                image = ImageOps.exif_transpose(image).convert("RGB")
+                ImageOps.fit(image, (180, 180), centering=(0.5, 0.3)).save(target, "PNG", optimize=True)
+    except OSError:
+        app.logger.exception("Could not create the touch icon")
+        return None
+    return f"generated/{target.name}"
+
+
 def site_url():
     return SITE_URL or request.url_root.rstrip("/")
 
@@ -406,6 +423,7 @@ def close_db(_error):
 def index():
     memories = get_memories()
     preview = share_image(memories[0]["file"]) if memories else None
+    icon = touch_icon(memories[0]["file"]) if memories else None
     flashes = [
         {"category": category, "en": FLASH_MESSAGES[key][0], "hi": FLASH_MESSAGES[key][1]}
         for category, key in get_flashed_messages(with_categories=True)
@@ -432,6 +450,7 @@ def index():
         flashes=flashes,
         page_url=site_url() + "/",
         preview_image_url=absolute_static(preview) if preview else None,
+        touch_icon_url=url_for("static", filename=icon) if icon else None,
         music_url=url_for("static", filename="music.mp3") if music_file.is_file() else None,
     )
 

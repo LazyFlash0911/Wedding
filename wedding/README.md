@@ -53,19 +53,27 @@ Put photos in `static/images/` (JPG, JPEG, PNG, GIF or WebP). Full-size phone ph
 Refresh the page after adding images.
 
 ## 5. Music
-`static/music.mp3` plays when a guest opens the envelope, and can be toggled from the menu bar. Delete the file to remove the music button.
+`static/music.mp3` plays when a guest opens the envelope, and can be toggled from the menu bar. Delete the file to remove the music button. Keep it small for guests on mobile data: a 96 kbps MP3 is about 3 MB for a 4-minute song.
 
-## 6. Guest wishes
+## 6. Built for phones
+Most guests will open the link from WhatsApp on a phone, so the page includes:
+- A bottom bar (Events, Venue, Photos, Wishes, Share) on phone-sized screens.
+- **Share:** opens the phone's share sheet, or WhatsApp directly, with a ready-written message in the guest's language.
+- **Add to calendar:** opens Apple Calendar on iPhones and Google Calendar everywhere else.
+- **On event days:** a banner at the top shows what is happening today, with a link to it; event cards show "Today", "Happening now" or "Completed".
+- Hindi is chosen automatically for phones set to Hindi; guests can switch at any time.
+
+## 7. Guest wishes
 Wishes are saved in `instance/wishes.db` (SQLite). To review or remove one:
 ```powershell
 flask --app app list-wishes
 flask --app app delete-wish 12
 ```
 
-## 7. QR cards for the venue
+## 8. QR cards for the venue
 Open http://127.0.0.1:5000/qr for printable QR cards linking to the invitation and each shared photo album. Set `SITE_URL` (below) before printing so the codes point at your public address.
 
-## 8. Publish it
+## 9. Publish it
 Deploy to any Python host and run it with a WSGI server, for example `waitress-serve --port=8000 app:app` or `gunicorn app:app`. Set these environment variables:
 - `FLASK_SECRET_KEY`: a long random string.
 - `SITE_URL`: your public address, such as `https://priyanka-ankoosh.in`. Used for WhatsApp previews and QR codes.
