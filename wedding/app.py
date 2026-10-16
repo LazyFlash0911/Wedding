@@ -1,7 +1,9 @@
+import hmac
 import os
 import re
 import secrets
 import sqlite3
+import threading
 import time
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -25,6 +27,7 @@ from flask import (
 )
 from markupsafe import Markup
 from PIL import Image, ImageOps
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 PROJECT_FOLDER = Path(__file__).resolve().parent
 STATIC_FOLDER = PROJECT_FOLDER / "static"
@@ -46,13 +49,23 @@ def load_secret_key():
     return key_file.read_text(encoding="utf-8").strip()
 
 
-app = Flask(__name__)
-app.secret_key = load_secret_key()
-app.config["MAX_CONTENT_LENGTH"] = 64 * 1024
-
 # Optional: the public address of the site (e.g. https://priyanka-ankoosh.in), used for
 # WhatsApp link previews and QR codes. Defaults to the address the page was opened with.
 SITE_URL = os.environ.get("SITE_URL", "").rstrip("/")
+
+# Optional: a password for /admin/wishes, where inappropriate wishes can be removed.
+# The admin page is switched off while this is empty.
+WISHES_ADMIN_PASSWORD = os.environ.get("WISHES_ADMIN_PASSWORD", "")
+
+app = Flask(__name__)
+app.secret_key = load_secret_key()
+app.config.update(
+    MAX_CONTENT_LENGTH=64 * 1024,
+    SESSION_COOKIE_SAMESITE="Lax",
+    SESSION_COOKIE_SECURE=SITE_URL.startswith("https://"),
+)
+# Hosting platforms put the app behind a proxy; this keeps https:// in generated links.
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
 
 IST = timezone(timedelta(hours=5, minutes=30))
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".gif", ".webp"}
@@ -270,7 +283,7 @@ def list_images(prefix):
 
 
 def save_jpeg(image, target):
-    temporary = target.with_name(f"{target.stem}.{os.getpid()}.tmp")
+    temporary = target.with_name(f"{target.stem}.{os.getpid()}.{threading.get_ident()}.tmp")
     image.save(temporary, "JPEG", quality=82, optimize=True, progressive=True)
     os.replace(temporary, target)
 
@@ -326,6 +339,34 @@ def touch_icon(filename):
         app.logger.exception("Could not create the touch icon")
         return None
     return f"generated/{target.name}"
+
+
+def prepare_images():
+    """Resize every photo ahead of time, so the first guest to open the link doesn't wait."""
+    couple = list_images("couple-")
+    for name in couple:
+        web_image(name, "medium")
+        web_image(name, "large")
+    for group in FAMILY_GROUPS:
+        for name in list_images(f"{group['id']}-"):
+            web_image(name, "thumb")
+            web_image(name, "large")
+    if couple:
+        share_image(couple[0])
+        touch_icon(couple[0])
+
+
+def csrf_token():
+    if "csrf" not in session:
+        session["csrf"] = secrets.token_urlsafe(32)
+    return session["csrf"]
+
+
+def csrf_valid():
+    return hmac.compare_digest(request.form.get("csrf_token", ""), session.get("csrf", ""))
+
+
+app.jinja_env.globals["csrf_token"] = csrf_token
 
 
 def site_url():
@@ -458,7 +499,7 @@ def index():
 @app.post("/wishes")
 def add_wish():
     back = redirect(url_for("index") + "#wishes")
-    if request.form.get("website"):  # Hidden field that only bots fill in.
+    if request.form.get("website") or not csrf_valid():  # Bots fill the hidden field; forged posts lack the token.
         return back
 
     name = " ".join(request.form.get("name", "").split())
@@ -482,6 +523,51 @@ def add_wish():
     session["last_wish_at"] = time.time()
     flash("wish-saved", "success")
     return back
+
+
+def admin_enabled():
+    return bool(WISHES_ADMIN_PASSWORD)
+
+
+@app.route("/admin/wishes", methods=["GET", "POST"])
+def admin_wishes():
+    """Phone-friendly page for the couple to remove inappropriate wishes."""
+    if not admin_enabled():
+        abort(404)
+    error = None
+    if request.method == "POST":
+        if not csrf_valid():
+            abort(400)
+        if hmac.compare_digest(request.form.get("password", ""), WISHES_ADMIN_PASSWORD):
+            session["admin"] = True
+            return redirect(url_for("admin_wishes"))
+        time.sleep(1)  # Slow down password guessing.
+        error = "That password is not correct."
+    wishes = []
+    if session.get("admin"):
+        wishes = get_db().execute(
+            "SELECT id, name, message, created_at FROM wishes ORDER BY id DESC"
+        ).fetchall()
+    return render_template("admin_wishes.html", wishes=wishes, logged_in=session.get("admin", False), error=error)
+
+
+@app.post("/admin/wishes/<int:wish_id>/delete")
+def admin_delete_wish(wish_id):
+    if not admin_enabled() or not session.get("admin"):
+        abort(404)
+    if not csrf_valid():
+        abort(400)
+    db = get_db()
+    db.execute("DELETE FROM wishes WHERE id = ?", (wish_id,))
+    db.commit()
+    return redirect(url_for("admin_wishes"))
+
+
+@app.post("/admin/logout")
+def admin_logout():
+    if csrf_valid():
+        session.pop("admin", None)
+    return redirect(url_for("index"))
 
 
 def ics_escape(text):
@@ -580,6 +666,8 @@ def delete_wish_command(wish_id):
     click.echo(f"Deleted wish {wish_id}." if deleted else f"No wish with ID {wish_id}.")
 
 
+threading.Thread(target=prepare_images, daemon=True).start()
+
 if __name__ == "__main__":
-    # Debug mode is for local use only; set FLASK_DEBUG=0 (or use a WSGI server) when hosting.
-    app.run(debug=os.environ.get("FLASK_DEBUG", "1") != "0")
+    # Set FLASK_DEBUG=1 while editing locally for auto-reload. Never enable it on a public host.
+    app.run(debug=os.environ.get("FLASK_DEBUG") == "1")

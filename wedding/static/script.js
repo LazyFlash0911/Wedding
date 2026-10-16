@@ -85,11 +85,24 @@
     updateMusicButton();
   }
 
-  musicButton?.addEventListener("click", () => {
+  if (musicButton) musicButton.addEventListener("click", () => {
     if (audio && !audio.paused) audio.pause();
     else startMusic();
   });
   languageListeners.push(updateMusicButton);
+
+  // Pause when the guest switches to another app (e.g. back to WhatsApp), resume when they return.
+  let pausedByHiding = false;
+  document.addEventListener("visibilitychange", () => {
+    if (!audio) return;
+    if (document.hidden && !audio.paused) {
+      audio.pause();
+      pausedByHiding = true;
+    } else if (!document.hidden && pausedByHiding) {
+      pausedByHiding = false;
+      startMusic();
+    }
+  });
 
   // Scroll reveal, started once the envelope intro is out of the way.
   function startReveal() {
@@ -118,7 +131,7 @@
     root.classList.remove("intro-leaving");
     if (intro) intro.hidden = true;
     window.scrollTo(0, 0);
-    document.getElementById("top")?.focus({ preventScroll: true });
+    document.getElementById("top").focus({ preventScroll: true });
     startReveal();
   }
 
@@ -127,7 +140,7 @@
     root.classList.add("intro-skipped");
     startReveal();
   } else {
-    openButton?.addEventListener("click", () => {
+    if (openButton) openButton.addEventListener("click", () => {
       session.set("invite-opened", "1");
       startMusic();
       document.body.classList.add("invitation-open");
@@ -147,11 +160,11 @@
   const navToggle = document.getElementById("nav-toggle");
   const navLinks = document.getElementById("nav-links");
   function setMenu(open) {
-    navToggle?.setAttribute("aria-expanded", String(open));
+    if (navToggle) navToggle.setAttribute("aria-expanded", String(open));
     document.body.classList.toggle("menu-open", open);
   }
-  navToggle?.addEventListener("click", () => setMenu(navToggle.getAttribute("aria-expanded") !== "true"));
-  navLinks?.addEventListener("click", (event) => { if (event.target.closest("a")) setMenu(false); });
+  if (navToggle) navToggle.addEventListener("click", () => setMenu(navToggle.getAttribute("aria-expanded") !== "true"));
+  if (navLinks) navLinks.addEventListener("click", (event) => { if (event.target.closest("a")) setMenu(false); });
   document.addEventListener("click", (event) => {
     if (document.body.classList.contains("menu-open") && !event.target.closest(".nav")) setMenu(false);
   });
@@ -233,7 +246,8 @@
   }
 
   // Share: the phone's share sheet where available, otherwise WhatsApp, otherwise copy the link.
-  const shareData = JSON.parse(document.getElementById("share-data")?.textContent || "{}");
+  const shareElement = document.getElementById("share-data");
+  const shareData = shareElement ? JSON.parse(shareElement.textContent) : {};
   const toast = document.getElementById("toast");
   let toastTimer = null;
 
@@ -319,14 +333,25 @@
     document.body.classList.add("lightbox-open");
     showLightboxItem(index);
     lightboxClose.focus();
+    // A history entry lets the phone's Back button close the photo instead of leaving the site.
+    try { history.pushState({ lightbox: true }, ""); } catch (error) { /* history unavailable */ }
   }
 
-  function closeLightbox() {
+  function hideLightbox() {
     lightbox.hidden = true;
     document.body.classList.remove("lightbox-open");
     lightboxImage.removeAttribute("src");
-    lightboxReturnFocus?.focus();
+    if (lightboxReturnFocus) lightboxReturnFocus.focus();
   }
+
+  function closeLightbox() {
+    if (history.state && history.state.lightbox) history.back(); // popstate below hides it
+    else hideLightbox();
+  }
+
+  window.addEventListener("popstate", () => {
+    if (lightbox && !lightbox.hidden) hideLightbox();
+  });
 
   document.addEventListener("click", (event) => {
     const trigger = event.target.closest("[data-lightbox]");
@@ -446,4 +471,5 @@
   }
 
   applyLanguage();
+  window.inviteReady = true; // Set last, so any earlier error falls back to the plain page.
 })();

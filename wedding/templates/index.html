@@ -18,6 +18,8 @@
   <meta name="theme-color" content="#f6e6e8">
   <!-- Stops phone browsers (and WhatsApp's in-app browser) from auto-darkening the design. -->
   <meta name="color-scheme" content="only light">
+  <!-- Keep family photos and addresses out of Google search; WhatsApp previews still work. -->
+  <meta name="robots" content="noindex, nofollow">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='30' fill='%23a45f70'/%3E%3Ctext x='32' y='42' font-family='Georgia,serif' font-size='26' fill='%23fff0df' text-anchor='middle'%3EP%E2%99%A5A%3C/text%3E%3C/svg%3E">
   {% if touch_icon_url %}<link rel="apple-touch-icon" href="{{ touch_icon_url }}">{% endif %}
   <title>Priyanka & Ankoosh — A Wedding Invitation</title>
@@ -46,6 +48,11 @@
       var savedLang = localStorage.getItem("lang");
       if (savedLang === "hi" || (!savedLang && /^hi\b/i.test(navigator.language || ""))) document.documentElement.lang = "hi";
     } catch (error) {}
+    // Safety net: if script.js fails to run (very old phone, blocked download), show the plain page
+    // instead of leaving the guest stuck on the envelope.
+    window.addEventListener("load", function () {
+      if (!window.inviteReady) document.documentElement.classList.remove("js");
+    });
   </script>
 </head>
 <body>
@@ -389,6 +396,7 @@
           <label for="wish-message" data-hi="आपका संदेश">Your message</label>
           <textarea id="wish-message" name="message" rows="4" maxlength="500" required
                     placeholder="Wishing you a lifetime of love…" data-hi-placeholder="आप दोनों को ज़िंदगी भर का प्यार मिले…"></textarea>
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
           <div class="wish-honeypot" aria-hidden="true">
             <label for="wish-website">Leave this empty</label>
             <input id="wish-website" name="website" type="text" tabindex="-1" autocomplete="off">
