@@ -1,4 +1,54 @@
 (() => {
+  // Pre-wedding, engagement, and wedding photos are loaded from Google Drive.
+  const driveCategory = document.getElementById("drive-category");
+  const drivePhotos = document.getElementById("drive-photo-grid");
+  const driveStatus = document.getElementById("drive-gallery-status");
+  const uploadCategory = document.getElementById("drive-upload-category");
+
+  async function loadDrivePhotos() {
+    if (!driveCategory || !drivePhotos || !driveStatus) return;
+
+    const category = driveCategory.value;
+    if (uploadCategory) uploadCategory.value = category;
+    drivePhotos.replaceChildren();
+    driveStatus.textContent = "Loading photos…";
+
+    try {
+      const response = await fetch(`/api/drive/photos/${encodeURIComponent(category)}`);
+      const result = await response.json();
+      if (!response.ok) throw new Error(result.error || "Could not load Google Drive photos.");
+
+      const photos = result.photos || [];
+      if (photos.length === 0) {
+        driveStatus.textContent = "No photos have been added to this album yet.";
+        return;
+      }
+
+      driveStatus.textContent = `${photos.length} photo${photos.length === 1 ? "" : "s"}`;
+      photos.forEach((photo) => {
+        const card = document.createElement("article");
+        card.className = "drive-photo-card";
+        const image = document.createElement("img");
+        image.src = photo.url;
+        image.alt = photo.name || "Wedding memory";
+        image.loading = "lazy";
+        const caption = document.createElement("p");
+        caption.textContent = photo.name || "Wedding memory";
+        card.append(image, caption);
+        drivePhotos.append(card);
+      });
+    } catch (error) {
+      driveStatus.textContent = error.message || "Could not load Google Drive photos.";
+      const message = document.createElement("p");
+      message.className = "drive-empty-state";
+      message.textContent = driveStatus.textContent;
+      drivePhotos.replaceChildren(message);
+    }
+  }
+
+  driveCategory?.addEventListener("change", loadDrivePhotos);
+  loadDrivePhotos();
+
   // Countdown to the wedding; event navigation and gallery work without a backend.
   const countdown = document.getElementById("countdown");
   if (countdown) {
@@ -70,9 +120,9 @@
 
   // Photo gallery. If a file hasn't been added yet, show the designed placeholder.
   const memories = [
-    { title: "A little bit of magic", text: "Replace this card with one of your favourite couple photos.", image: "/static/images/couple-1.jpg", file: "couple-1.jpg" },
-    { title: "Our favourite memories", text: "Add a candid, a favourite trip, or a special moment.", image: "/static/images/couple-2.jpg", file: "couple-2.jpg" },
-    { title: "The beginning of forever", text: "One more photo to make this invitation yours.", image: "/static/images/couple-3.jpg", file: "couple-3.jpg" },
+    { title: "A little bit of magic", text: "Replace this card with one of your favourite couple photos.", image: "/static/images/couple-1.JPG", file: "couple-1.JPG" },
+    { title: "Our favourite memories", text: "Add a candid, a favourite trip, or a special moment.", image: "/static/images/couple-2.JPG", file: "couple-2.JPG" },
+    { title: "The beginning of forever", text: "One more photo to make this invitation yours.", image: "/static/images/couple-3.JPG", file: "couple-3.JPG" },
   ];
   let currentMemory = 0;
   const img = document.getElementById("gallery-image");
