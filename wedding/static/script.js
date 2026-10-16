@@ -1,220 +1,318 @@
 (() => {
-  // Pre-wedding, engagement, and wedding photos are loaded from Google Drive.
-  const driveCategory = document.getElementById("drive-category");
-  const drivePhotos = document.getElementById("drive-photo-grid");
-  const driveStatus = document.getElementById("drive-gallery-status");
-  const uploadCategory = document.getElementById("drive-upload-category");
-
-  async function loadDrivePhotos() {
-    if (!driveCategory || !drivePhotos || !driveStatus) return;
-
-    const category = driveCategory.value;
-    if (uploadCategory) uploadCategory.value = category;
-    drivePhotos.replaceChildren();
-    driveStatus.textContent = "Loading photos…";
-
-    try {
-      const response = await fetch(`/api/drive/photos/${encodeURIComponent(category)}`);
-      const result = await response.json();
-      if (!response.ok) throw new Error(result.error || "Could not load Google Drive photos.");
-
-      const photos = result.photos || [];
-      if (photos.length === 0) {
-        driveStatus.textContent = "No photos have been added to this album yet.";
-        return;
-      }
-
-      driveStatus.textContent = `${photos.length} photo${photos.length === 1 ? "" : "s"}`;
-      photos.forEach((photo) => {
-        const card = document.createElement("article");
-        card.className = "drive-photo-card";
-        const image = document.createElement("img");
-        image.src = photo.url;
-        image.alt = photo.name || "Wedding memory";
-        image.loading = "lazy";
-        const caption = document.createElement("p");
-        caption.textContent = photo.name || "Wedding memory";
-        card.append(image, caption);
-        drivePhotos.append(card);
-      });
-    } catch (error) {
-      driveStatus.textContent = error.message || "Could not load Google Drive photos.";
-      const message = document.createElement("p");
-      message.className = "drive-empty-state";
-      message.textContent = driveStatus.textContent;
-      drivePhotos.replaceChildren(message);
-    }
-  }
-
-  driveCategory?.addEventListener("change", loadDrivePhotos);
-  loadDrivePhotos();
-
-  // Countdown to the wedding; event navigation and gallery work without a backend.
-  const countdown = document.getElementById("countdown");
-  if (countdown) {
-    const target = new Date(countdown.dataset.date).getTime();
-    const fields = {
-      days: document.getElementById("days"),
-      hours: document.getElementById("hours"),
-      minutes: document.getElementById("minutes"),
-      seconds: document.getElementById("seconds"),
-    };
-    function updateCountdown() {
-      let remaining = target - Date.now();
-      if (!Number.isFinite(target) || remaining <= 0) {
-        Object.values(fields).forEach((node) => node.textContent = "0");
-        return;
-      }
-      fields.days.textContent = Math.floor(remaining / 86400000);
-      fields.hours.textContent = Math.floor((remaining % 86400000) / 3600000);
-      fields.minutes.textContent = Math.floor((remaining % 3600000) / 60000);
-      fields.seconds.textContent = Math.floor((remaining % 60000) / 1000);
-    }
-    updateCountdown();
-    window.setInterval(updateCountdown, 1000);
-  }
-
-  // Envelope opening: reveal the invitation and send the guest to the details.
-  const openButton = document.getElementById("open-invite");
-  if (openButton) {
-    openButton.addEventListener("click", () => {
-      document.body.classList.add("invitation-open");
-      openButton.setAttribute("aria-expanded", "true");
-      const label = document.getElementById("open-label");
-      if (label) label.textContent = "Your invitation is open";
-      window.setTimeout(() => {
-        document.getElementById("our-story")?.scrollIntoView({ behavior: reducedMotion ? "auto" : "smooth" });
-      }, 450);
-    });
-  }
-
+  const root = document.documentElement;
   const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const store = (storage) => ({
+    get(key) { try { return storage().getItem(key); } catch (error) { return null; } },
+    set(key, value) { try { storage().setItem(key, value); } catch (error) { /* storage unavailable */ } },
+  });
+  const local = store(() => window.localStorage);
+  const session = store(() => window.sessionStorage);
 
-  // Clickable event timeline: update selected tab and the matching detail panel.
-  const tabs = Array.from(document.querySelectorAll(".event-tab"));
-  const panels = Array.from(document.querySelectorAll(".event-panel"));
-  function selectEvent(id) {
-    tabs.forEach((tab) => {
-      const selected = tab.dataset.event === id;
-      tab.classList.toggle("active", selected);
-      tab.setAttribute("aria-selected", String(selected));
-      tab.tabIndex = selected ? 0 : -1;
-    });
-    panels.forEach((panel) => {
-      const selected = panel.id === `panel-${id}`;
-      panel.hidden = !selected;
-      panel.classList.toggle("active", selected);
+  // Language toggle: elements carry their Hindi text in data-hi attributes.
+  const STRINGS = {
+    en: { musicOn: "Music on", musicOff: "Music off", turnMusicOn: "Turn music on", turnMusicOff: "Turn music off", otherLanguage: "हिंदी", opened: "Your invitation is open" },
+    hi: { musicOn: "संगीत चालू", musicOff: "संगीत बंद", turnMusicOn: "संगीत चालू करें", turnMusicOff: "संगीत बंद करें", otherLanguage: "English", opened: "आपका निमंत्रण खुल गया है" },
+  };
+  let lang = local.get("lang") === "hi" ? "hi" : "en";
+  const t = (key) => STRINGS[lang][key];
+  const languageListeners = [];
+  const englishTitle = document.title;
+
+  function swap(selector, hiKey, enKey, read, write) {
+    document.querySelectorAll(selector).forEach((element) => {
+      if (element.dataset[enKey] === undefined) element.dataset[enKey] = read(element);
+      write(element, lang === "hi" ? element.dataset[hiKey] : element.dataset[enKey]);
     });
   }
-  tabs.forEach((tab, index) => {
-    tab.addEventListener("click", () => selectEvent(tab.dataset.event));
-    tab.addEventListener("keydown", (event) => {
-      if (!["ArrowDown", "ArrowUp", "ArrowRight", "ArrowLeft"].includes(event.key)) return;
-      event.preventDefault();
-      const nextIndex = (index + (["ArrowDown", "ArrowRight"].includes(event.key) ? 1 : -1) + tabs.length) % tabs.length;
-      tabs[nextIndex].focus();
-      selectEvent(tabs[nextIndex].dataset.event);
+
+  function applyLanguage() {
+    root.lang = lang;
+    swap("[data-hi]", "hi", "en", (el) => el.textContent, (el, value) => { el.textContent = value; });
+    swap("[data-hi-html]", "hiHtml", "enHtml", (el) => el.innerHTML, (el, value) => { el.innerHTML = value; });
+    swap("[data-hi-placeholder]", "hiPlaceholder", "enPlaceholder", (el) => el.placeholder, (el, value) => { el.placeholder = value; });
+    swap("[data-hi-aria-label]", "hiAriaLabel", "enAriaLabel", (el) => el.getAttribute("aria-label") || "", (el, value) => el.setAttribute("aria-label", value));
+    document.title = lang === "hi" ? root.dataset.titleHi : englishTitle;
+    document.querySelectorAll(".lang-toggle").forEach((button) => { button.textContent = t("otherLanguage"); });
+    languageListeners.forEach((listener) => listener());
+  }
+
+  document.querySelectorAll(".lang-toggle").forEach((button) => {
+    button.addEventListener("click", () => {
+      lang = lang === "hi" ? "en" : "hi";
+      local.set("lang", lang);
+      applyLanguage();
     });
   });
-  if (tabs.length) tabs.forEach((tab, i) => tab.tabIndex = i === 0 ? 0 : -1);
 
-  // Photo gallery. If a file hasn't been added yet, show the designed placeholder.
-  const memories = [
-    { title: "A little bit of magic", text: "Replace this card with one of your favourite couple photos.", image: "/static/images/couple-1.JPG", file: "couple-1.JPG" },
-    { title: "Our favourite memories", text: "Add a candid, a favourite trip, or a special moment.", image: "/static/images/couple-2.JPG", file: "couple-2.JPG" },
-    { title: "The beginning of forever", text: "One more photo to make this invitation yours.", image: "/static/images/couple-3.JPG", file: "couple-3.JPG" },
-  ];
-  let currentMemory = 0;
-  const img = document.getElementById("gallery-image");
-  const placeholder = document.getElementById("photo-placeholder");
-  const prev = document.getElementById("gallery-prev");
-  const next = document.getElementById("gallery-next");
-  const dots = Array.from(document.querySelectorAll("#gallery-dots button"));
-  function showMemory(index) {
-    currentMemory = Math.max(0, Math.min(memories.length - 1, index));
-    const item = memories[currentMemory];
-    document.getElementById("memory-title").textContent = item.title;
-    document.getElementById("memory-text").textContent = item.text;
-    document.getElementById("memory-index").textContent = `${String(currentMemory + 1).padStart(2, "0")} / ${String(memories.length).padStart(2, "0")}`;
-    img.classList.remove("loaded");
-    placeholder.hidden = false;
-    placeholder.querySelector("small").textContent = `Add ${item.file} to static/images`;
-    img.onload = () => { img.classList.add("loaded"); placeholder.hidden = true; };
-    img.onerror = () => { img.classList.remove("loaded"); placeholder.hidden = false; };
-    img.src = item.image;
-    prev.disabled = currentMemory === 0;
-    next.disabled = currentMemory === memories.length - 1;
-    dots.forEach((dot, i) => dot.classList.toggle("active", i === currentMemory));
-  }
-  prev?.addEventListener("click", () => showMemory(currentMemory - 1));
-  next?.addEventListener("click", () => showMemory(currentMemory + 1));
-  dots.forEach((dot) => dot.addEventListener("click", () => showMemory(Number(dot.dataset.index))));
-  if (img) showMemory(0);
-
-  // Optional music toggle. Add static/music.mp3 to enable it; otherwise give a clear message.
-
-  /* Wedding background music */
+  // Background music: loaded only when the guest opens the invitation or presses the button.
   const musicButton = document.getElementById("music-toggle");
   const musicLabel = document.getElementById("music-label");
-
-  const audio = new Audio("/static/music.mp3");
-  audio.loop = true;
-  audio.volume = 0.3;
-  audio.preload = "auto";
-
-  let musicStarted = false;
+  let audio = null;
 
   function updateMusicButton() {
-    const playing = !audio.paused;
-
+    if (!musicButton) return;
+    const playing = Boolean(audio && !audio.paused);
     musicButton.setAttribute("aria-pressed", String(playing));
-    musicLabel.textContent = playing ? "Music on" : "Music off";
-    musicButton.title = playing ? "Turn music off" : "Turn music on";
+    musicLabel.textContent = playing ? t("musicOn") : t("musicOff");
+    musicButton.title = playing ? t("turnMusicOff") : t("turnMusicOn");
   }
 
   async function startMusic() {
+    if (!musicButton) return;
+    if (!audio) {
+      audio = new Audio(musicButton.dataset.src);
+      audio.loop = true;
+      audio.volume = 0.3;
+      audio.addEventListener("play", updateMusicButton);
+      audio.addEventListener("pause", updateMusicButton);
+    }
     try {
       await audio.play();
-      musicStarted = true;
-      updateMusicButton();
     } catch (error) {
-      // The browser may require a user interaction first.
-      updateMusicButton();
+      // Playback was blocked or the file is missing; the button stays off.
     }
+    updateMusicButton();
   }
 
-  // Try to start music when the page loads.
-  startMusic();
+  musicButton?.addEventListener("click", () => {
+    if (audio && !audio.paused) audio.pause();
+    else startMusic();
+  });
+  languageListeners.push(updateMusicButton);
 
-  // Start or stop music using the visible button.
-  musicButton.addEventListener("click", async () => {
-    if (audio.paused) {
-      await startMusic();
-    } else {
-      audio.pause();
-      updateMusicButton();
+  // Scroll reveal, started once the envelope intro is out of the way.
+  function startReveal() {
+    const items = document.querySelectorAll(".reveal");
+    if (reducedMotion || !("IntersectionObserver" in window)) {
+      items.forEach((item) => item.classList.add("is-visible"));
+      return;
     }
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (!entry.isIntersecting) return;
+        entry.target.classList.add("is-visible");
+        observer.unobserve(entry.target);
+      });
+    }, { rootMargin: "0px 0px -8% 0px", threshold: 0.1 });
+    items.forEach((item) => observer.observe(item));
+  }
+
+  // Envelope intro: open the flap, slide the letter up, then fade into the invitation.
+  const intro = document.getElementById("intro");
+  const openButton = document.getElementById("open-invite");
+  const openLabel = document.getElementById("open-label");
+
+  function closeIntro() {
+    root.classList.add("intro-skipped");
+    root.classList.remove("intro-leaving");
+    if (intro) intro.hidden = true;
+    window.scrollTo(0, 0);
+    document.getElementById("top")?.focus({ preventScroll: true });
+    startReveal();
+  }
+
+  if (!intro || root.classList.contains("intro-skipped")) {
+    if (intro) intro.hidden = true;
+    root.classList.add("intro-skipped");
+    startReveal();
+  } else {
+    openButton?.addEventListener("click", () => {
+      session.set("invite-opened", "1");
+      startMusic();
+      document.body.classList.add("invitation-open");
+      openButton.setAttribute("aria-expanded", "true");
+      openButton.disabled = true;
+      openLabel.dataset.en = STRINGS.en.opened;
+      openLabel.dataset.hi = STRINGS.hi.opened;
+      openLabel.textContent = t("opened");
+      window.setTimeout(() => {
+        root.classList.add("intro-leaving");
+        window.setTimeout(closeIntro, reducedMotion ? 0 : 750);
+      }, reducedMotion ? 0 : 1500);
+    });
+  }
+
+  // Mobile menu.
+  const navToggle = document.getElementById("nav-toggle");
+  const navLinks = document.getElementById("nav-links");
+  function setMenu(open) {
+    navToggle?.setAttribute("aria-expanded", String(open));
+    document.body.classList.toggle("menu-open", open);
+  }
+  navToggle?.addEventListener("click", () => setMenu(navToggle.getAttribute("aria-expanded") !== "true"));
+  navLinks?.addEventListener("click", (event) => { if (event.target.closest("a")) setMenu(false); });
+  document.addEventListener("click", (event) => {
+    if (document.body.classList.contains("menu-open") && !event.target.closest(".nav")) setMenu(false);
   });
 
-  // The invitation-opening click is also a user gesture.
-  // This is a reliable opportunity to start playback.
-  document.getElementById("open-invite")
-    ?.addEventListener("click", () => {
-      if (!musicStarted) {
-        startMusic();
+  // Countdown to the wedding, replaced by a message once the day arrives.
+  const countdown = document.getElementById("countdown");
+  if (countdown) {
+    const target = new Date(countdown.dataset.date).getTime();
+    const fields = ["days", "hours", "minutes", "seconds"].map((id) => document.getElementById(id));
+    let timer = null;
+    function updateCountdown() {
+      const remaining = target - Date.now();
+      if (!Number.isFinite(target) || remaining <= 0) {
+        document.getElementById("countdown-live").hidden = true;
+        document.getElementById("countdown-done").hidden = false;
+        if (timer) window.clearInterval(timer);
+        return;
+      }
+      const values = [
+        Math.floor(remaining / 86400000),
+        Math.floor((remaining % 86400000) / 3600000),
+        Math.floor((remaining % 3600000) / 60000),
+        Math.floor((remaining % 60000) / 1000),
+      ];
+      fields.forEach((field, index) => { field.textContent = values[index]; });
+    }
+    updateCountdown();
+    timer = window.setInterval(updateCountdown, 1000);
+  }
+
+  // Full-screen photo viewer with keyboard and swipe support.
+  const lightbox = document.getElementById("lightbox");
+  const lightboxImage = document.getElementById("lightbox-image");
+  const lightboxCaption = document.getElementById("lightbox-caption");
+  const lightboxPrev = document.getElementById("lightbox-prev");
+  const lightboxNext = document.getElementById("lightbox-next");
+  const lightboxClose = document.getElementById("lightbox-close");
+  let lightboxItems = [];
+  let lightboxIndex = 0;
+  let lightboxReturnFocus = null;
+
+  const captionFor = (item) => (lang === "hi" && item.captionHi ? item.captionHi : item.caption) || "";
+
+  function showLightboxItem(index) {
+    lightboxIndex = (index + lightboxItems.length) % lightboxItems.length;
+    const item = lightboxItems[lightboxIndex];
+    lightboxImage.src = item.src;
+    lightboxImage.alt = captionFor(item);
+    lightboxCaption.textContent = captionFor(item);
+    lightboxPrev.hidden = lightboxNext.hidden = lightboxItems.length < 2;
+  }
+
+  function openLightbox(items, index, trigger) {
+    if (!lightbox || !items.length) return;
+    lightboxItems = items;
+    lightboxReturnFocus = trigger;
+    lightbox.hidden = false;
+    document.body.classList.add("lightbox-open");
+    showLightboxItem(index);
+    lightboxClose.focus();
+  }
+
+  function closeLightbox() {
+    lightbox.hidden = true;
+    document.body.classList.remove("lightbox-open");
+    lightboxImage.removeAttribute("src");
+    lightboxReturnFocus?.focus();
+  }
+
+  document.addEventListener("click", (event) => {
+    const trigger = event.target.closest("[data-lightbox]");
+    if (!trigger) return;
+    const group = Array.from(document.querySelectorAll(`[data-lightbox="${trigger.dataset.lightbox}"]`));
+    const items = group.map((element) => ({
+      src: element.dataset.src,
+      caption: element.dataset.caption,
+      captionHi: element.dataset.captionHi,
+    }));
+    openLightbox(items, group.indexOf(trigger), trigger);
+  });
+
+  if (lightbox) {
+    lightboxClose.addEventListener("click", closeLightbox);
+    lightboxPrev.addEventListener("click", () => showLightboxItem(lightboxIndex - 1));
+    lightboxNext.addEventListener("click", () => showLightboxItem(lightboxIndex + 1));
+    lightbox.addEventListener("click", (event) => { if (event.target === lightbox) closeLightbox(); });
+    lightbox.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") closeLightbox();
+      else if (event.key === "ArrowLeft") showLightboxItem(lightboxIndex - 1);
+      else if (event.key === "ArrowRight") showLightboxItem(lightboxIndex + 1);
+      else if (event.key === "Tab") {
+        const focusable = Array.from(lightbox.querySelectorAll("button:not([hidden])"));
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+        else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
       }
     });
+    addSwipe(lightbox, () => showLightboxItem(lightboxIndex + 1), () => showLightboxItem(lightboxIndex - 1));
+    languageListeners.push(() => { if (!lightbox.hidden) showLightboxItem(lightboxIndex); });
+  }
 
-  audio.addEventListener("play", updateMusicButton);
-  audio.addEventListener("pause", updateMusicButton);
+  function addSwipe(element, onLeft, onRight) {
+    let startX = null;
+    element.addEventListener("touchstart", (event) => { startX = event.touches[0].clientX; }, { passive: true });
+    element.addEventListener("touchend", (event) => {
+      if (startX === null) return;
+      const distance = event.changedTouches[0].clientX - startX;
+      startX = null;
+      if (Math.abs(distance) < 50) return;
+      event.preventDefault(); // A swipe should not also count as a tap.
+      if (distance < 0) onLeft(); else onRight();
+    });
+  }
 
+  // Memories carousel. Photos and captions come from the server as JSON.
+  const memoriesData = document.getElementById("memories-data");
+  const memories = memoriesData ? JSON.parse(memoriesData.textContent) : [];
+  const memoryImage = document.getElementById("gallery-image");
+  const memoryFrame = document.getElementById("memory-open");
+  const memoryPrev = document.getElementById("gallery-prev");
+  const memoryNext = document.getElementById("gallery-next");
+  const memoryDots = Array.from(document.querySelectorAll("#gallery-dots button"));
+  let currentMemory = 0;
+
+  function memoryText(item, key) {
+    return (lang === "hi" && item[`${key}_hi`]) || item[key] || "";
+  }
+
+  function showMemory(index) {
+    if (!memories.length || !memoryImage) return;
+    currentMemory = Math.max(0, Math.min(memories.length - 1, index));
+    const item = memories[currentMemory];
+    document.getElementById("memory-title").textContent = memoryText(item, "title");
+    document.getElementById("memory-text").textContent = memoryText(item, "caption");
+    document.getElementById("memory-index").textContent =
+      `${String(currentMemory + 1).padStart(2, "0")} / ${String(memories.length).padStart(2, "0")}`;
+    if (!memoryImage.src.endsWith(item.src)) {
+      memoryImage.classList.remove("loaded");
+      memoryImage.src = item.src;
+    }
+    memoryImage.alt = memoryText(item, "title") || "Priyanka and Ankoosh";
+    memoryPrev.disabled = currentMemory === 0;
+    memoryNext.disabled = currentMemory === memories.length - 1;
+    memoryDots.forEach((dot, i) => dot.classList.toggle("active", i === currentMemory));
+  }
+
+  if (memoryImage) {
+    memoryImage.addEventListener("load", () => memoryImage.classList.add("loaded"));
+    if (memoryImage.complete) memoryImage.classList.add("loaded");
+    memoryPrev.addEventListener("click", () => showMemory(currentMemory - 1));
+    memoryNext.addEventListener("click", () => showMemory(currentMemory + 1));
+    memoryDots.forEach((dot) => dot.addEventListener("click", () => showMemory(Number(dot.dataset.index))));
+    memoryFrame.addEventListener("click", () => {
+      const items = memories.map((item) => ({
+        src: item.large,
+        caption: [item.title, item.caption].filter(Boolean).join(" · "),
+        captionHi: [item.title_hi, item.caption_hi].filter(Boolean).join(" · "),
+      }));
+      openLightbox(items, currentMemory, memoryFrame);
+    });
+    addSwipe(memoryFrame, () => showMemory(currentMemory + 1), () => showMemory(currentMemory - 1));
+    languageListeners.push(() => showMemory(currentMemory));
+    showMemory(0);
+  }
 
   // Subtle falling petals. Respects reduced-motion preferences.
   const petalLayer = document.getElementById("petal-layer");
   if (petalLayer && !reducedMotion) {
     const symbols = ["✿", "❀", "✽"];
     let count = 0;
-    function dropPetal() {
+    window.setInterval(() => {
       if (document.hidden || count >= 12) return;
       const petal = document.createElement("span");
       petal.className = "petal";
@@ -226,7 +324,8 @@
       petalLayer.appendChild(petal);
       count++;
       petal.addEventListener("animationend", () => { petal.remove(); count--; });
-    }
-    window.setInterval(dropPetal, 1500);
+    }, 1500);
   }
+
+  applyLanguage();
 })();
