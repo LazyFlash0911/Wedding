@@ -16,6 +16,7 @@
     <div class="nav-links">
       <a href="#our-story">Our story</a>
       <a href="#celebrations">Celebrations</a>
+      <a href="#drive-gallery">Photos</a>
       <a href="#family">Family</a>
       <a href="#memories">Memories</a>
     </div>
@@ -40,6 +41,50 @@
         the beginning of this beautiful journey.
       </p>
     </div>
+  </section>
+
+  <section class="drive-gallery section" id="drive-gallery">
+    <div class="section-kicker"><span>✿</span> MEMORIES TO KEEP FOREVER <span>✿</span></div>
+    <h2>Our wedding photo album.</h2>
+    <p class="body-copy">Choose a moment to view its photos. New memories can be added directly to our Google Drive.</p>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        <div class="drive-flash-messages" aria-live="polite">
+          {% for category, message in messages %}
+            <p class="drive-flash {{ category }}">{{ message }}</p>
+          {% endfor %}
+        </div>
+      {% endif %}
+    {% endwith %}
+
+    <div class="drive-category-picker">
+      <label for="drive-category">Browse photos</label>
+      <select id="drive-category" aria-describedby="drive-gallery-status">
+        {% for category in drive_categories %}
+          <option value="{{ category.id }}">{{ category.title }}</option>
+        {% endfor %}
+      </select>
+    </div>
+
+    <p class="drive-gallery-status" id="drive-gallery-status" role="status" aria-live="polite">Select a category to load its Google Drive photos.</p>
+    <div class="drive-photo-grid" id="drive-photo-grid"></div>
+
+    <details class="drive-upload-details" {% if not drive_upload_enabled %}data-disabled="true"{% endif %}>
+      <summary>Add photos to Google Drive</summary>
+      {% if drive_upload_enabled %}
+        <form class="drive-upload-form" action="{{ url_for('upload_drive_photos') }}" method="post" enctype="multipart/form-data">
+          <input id="drive-upload-category" type="hidden" name="category" value="{{ drive_categories[0].id }}">
+          <label for="drive-photo-files">Choose photos (JPG, PNG, GIF, or WebP; up to 20 MB each)</label>
+          <input id="drive-photo-files" type="file" name="photos" accept="image/jpeg,image/png,image/gif,image/webp" multiple required>
+          <label for="drive-upload-password">Upload password</label>
+          <input id="drive-upload-password" type="password" name="upload_password" autocomplete="current-password" required>
+          <button class="drive-upload-button" type="submit">Upload to selected album</button>
+        </form>
+      {% else %}
+        <p class="drive-upload-setup-note">Google Drive uploads are not configured yet. The site owner must authorize their Google account and set the album folder IDs and upload password on the server.</p>
+      {% endif %}
+    </details>
   </section>
 
   <main>
@@ -179,7 +224,7 @@
             <div class="photo-placeholder" id="photo-placeholder">
               <span class="placeholder-flower">✿</span>
               <b>Your photo goes here</b>
-              <small>Add couple-1.jpg to static/images</small>
+              <small>Add couple-1.JPG to static/images</small>
             </div>
             <span class="photo-tape"></span>
           </div>
@@ -196,7 +241,7 @@
           <button type="button" class="{% if loop.first %}active{% endif %}" data-index="{{ loop.index0 }}" aria-label="Show memory {{ loop.index }}"></button>
         {% endfor %}
       </div>
-      <p class="gallery-help">To personalize the album, add your photos as <code>couple-1.jpg</code>, <code>couple-2.jpg</code>, and <code>couple-3.jpg</code> inside <code>static/images/</code>.</p>
+      <p class="gallery-help">To personalize the album, add your photos as <code>couple-1.JPG</code>, <code>couple-2.JPG</code>, and <code>couple-3.JPG</code> inside <code>static/images/</code>.</p>
     </section>
 
     <section class="venue-section section">
