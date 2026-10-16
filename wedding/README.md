@@ -1,6 +1,6 @@
 # Wedding Invitation Website (Python + Flask)
 
-A responsive starter wedding invitation website with a countdown, venue directions, and a simple RSVP form.
+A responsive wedding invitation website with a countdown, venue directions, family photos, and Google Drive albums.
 
 ## 1. Requirements
 - Python 3.10 or newer
@@ -48,10 +48,32 @@ The family gallery reads image files directly from `static/images/`. Add JPG, JP
 - `groom-grandparents-`
 - `bride-grandparents-`
 
-Add as many numbered photos as needed, such as `bride-siblings-1.jpg` and `bride-siblings-2.jpg`. Refresh the page after adding images; no upload form or database is used.
+Add as many numbered photos as needed, such as `bride-siblings-1.jpg` and `bride-siblings-2.jpg`. Refresh the page after adding images.
 
-## 5. RSVP storage
-For this starter project, RSVP entries are saved in `rsvps.json` on the server. This is suitable for a local demo, not a production system. For a public website, use a database or managed form backend, protect guest data, and add spam protection.
+## 5. Google Drive pre-wedding, engagement, and wedding albums
+The photo album at the top of the page reads and displays images from three Google Drive folders. The upload form sends selected photos directly to the matching folder.
+
+### One-time Google setup
+1. In [Google Cloud Console](https://console.cloud.google.com/), create/select a project and enable the **Google Drive API**.
+2. Configure the OAuth consent screen and add your Google account as a test user if the app is in Testing mode.
+3. Create an OAuth client with application type **Desktop app**. Download its JSON file to `secrets/google-oauth-client.json` beside `app.py` (or set `GOOGLE_OAUTH_CLIENT_FILE`). Keep this private; `secrets/` is git-ignored.
+4. Create three folders in the Google Drive account you want to use: Pre-wedding, Engagement, and Wedding. Copy each folder ID from its Drive URL: `https://drive.google.com/drive/folders/FOLDER_ID`.
+5. Run the authorization helper below. It opens Google sign-in in your browser and saves a private refresh token to `secrets/google-drive-token.json`. Authorize with the Google account whose Drive will store the photos. Google will ask to grant Drive access so the app can list and upload files in the configured folders.
+
+### Configure and run (Windows PowerShell)
+Set these environment variables, authorize your Google account once, then start Flask (replace the example values):
+```powershell
+$env:GOOGLE_DRIVE_PRE_WEDDING_FOLDER_ID = "your-pre-wedding-folder-id"
+$env:GOOGLE_DRIVE_ENGAGEMENT_FOLDER_ID = "your-engagement-folder-id"
+$env:GOOGLE_DRIVE_WEDDING_FOLDER_ID = "your-wedding-folder-id"
+$env:DRIVE_UPLOAD_PASSWORD = "choose-a-long-private-upload-password"
+$env:FLASK_SECRET_KEY = "use-a-long-random-secret"
+pip install -r requirements.txt
+python authorize_google_drive.py
+python app.py
+```
+
+JPG, JPEG, PNG, GIF, and WebP images up to 20 MB each are accepted; upload up to 10 photos per submission. The upload password is checked server-side. The Drive OAuth token grants the app access to the authorized account, so protect it like a password. Album photos are served by the website and are visible to its visitors. Never commit the OAuth client JSON, token file, or passwords. Deploy only over HTTPS and configure the token as a private secret file on your host. Google OAuth consent-screen Testing mode may expire refresh tokens after seven days; follow Google's publishing and verification requirements for longer-lived public use.
 
 ## 6. Publish it
-To share a public link, deploy the Flask app to a Python-compatible hosting provider. Set a strong `FLASK_SECRET_KEY` environment variable, turn off debug mode, and use persistent database storage before collecting real guest RSVPs. Do not expose `rsvps.json` publicly.
+Deploy the Flask app to a Python-compatible hosting provider. Configure the Drive settings above as private environment variables, provide the OAuth token file using your host's secret-file mechanism, use HTTPS, and turn off debug mode in production.
