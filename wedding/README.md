@@ -1,12 +1,12 @@
 # Wedding Invitation Website (Python + Flask)
 
-A responsive wedding invitation website with a countdown, venue directions, family photos, and Google Drive albums.
+A responsive, bilingual (English / हिंदी) wedding invitation with an envelope intro, live countdown, event timeline with calendar links, venue map, family portraits, a photo carousel, Google Drive album links, and a guest wishes wall.
 
 ## 1. Requirements
 - Python 3.10 or newer
-- Internet connection for Google Fonts (optional; the page has fallback fonts)
+- An internet connection for Google Fonts and the embedded map (the page has fallback fonts)
 
-## 2. Set up
+## 2. Run it locally
 
 Open a terminal in this folder and run:
 
@@ -26,54 +26,64 @@ pip install -r requirements.txt
 python app.py
 ```
 
-Open http://127.0.0.1:5000 in your browser.
+Open http://127.0.0.1:5000 in your browser. When the app starts it makes web-sized copies of the photos in `static/generated/` (a few seconds). While editing, run with `$env:FLASK_DEBUG = "1"` (Windows) or `FLASK_DEBUG=1` (macOS/Linux) so changes reload automatically.
+
+The envelope intro shows once per browser session. To see it again, open the page in a new private window.
 
 ## 3. Personalize it
-Open `app.py` and edit the `WEDDING` dictionary:
-- `partner_one` and `partner_two`
-- `date_text` and `date_iso`
-- `venue` and `address`
-- `ceremony_time` and `contact`
+All content lives near the top of `app.py`, with Hindi text in the matching `_hi` fields:
+- `WEDDING`: names, date, ceremony time. `date_iso` drives the countdown (ISO format with the +05:30 offset).
+- `VENUES`: venue names, addresses and "getting there" tips.
+- `EVENTS`: each celebration, including its dress code, accent colour, and `start`/`end` times used for "Add to calendar".
+- `FAMILY_GROUPS`: optional `names` shown under each portrait.
+- `MEMORY_CAPTIONS`: titles and captions for the couple photos, in order.
+- `PHOTO_ALBUMS`: Google Drive links. Leave `url` empty to show "Shared after the wedding".
+- `STAYS` and `CONTACTS`: hotels and phone numbers for guests. Each section stays hidden until you add entries.
 
-Update the text and styling in `templates/index.html` and `static/style.css` as needed.
+Text that is written directly in the page lives in `templates/index.html`; the Hindi version of each piece of text is in its `data-hi` attribute.
 
-**Important:** `date_iso` should be in ISO format such as `2027-02-14T17:00:00`. Use the correct local time for your event.
+## 4. Photos
+Put photos in `static/images/` (JPG, JPEG, PNG, GIF or WebP). Full-size phone photos are fine: the site resizes and rotates them automatically.
 
-## 4. Meet the family photos
-The family gallery reads image files directly from `static/images/`. Add JPG, JPEG, PNG, GIF, or WebP files using these filename prefixes:
-- `groom-parents-` (for example, `groom-parents-1.jpg`)
-- `bride-parents-`
-- `groom-siblings-`
-- `bride-siblings-`
-- `groom-grandparents-`
-- `bride-grandparents-`
+- **Memories carousel:** `couple-1.jpg`, `couple-2.jpg`, … (as many as you like). The first one is also used as the WhatsApp link preview image.
+- **Family portraits:** use these prefixes, numbered from 1:
+  `groom-parents-`, `bride-parents-`, `groom-siblings-`, `bride-siblings-`, `groom-grandparents-`, `bride-grandparents-`.
+  Groups without photos are hidden.
 
-Add as many numbered photos as needed, such as `bride-siblings-1.jpg` and `bride-siblings-2.jpg`. Refresh the page after adding images.
+Refresh the page after adding images.
 
-## 5. Google Drive pre-wedding, engagement, and wedding albums
-The photo album at the top of the page reads and displays images from three Google Drive folders. The upload form sends selected photos directly to the matching folder.
+## 5. Music
+`static/music.mp3` plays when a guest opens the envelope, and can be toggled from the menu bar. Delete the file to remove the music button. Keep it small for guests on mobile data: a 96 kbps MP3 is about 3 MB for a 4-minute song.
 
-### One-time Google setup
-1. In [Google Cloud Console](https://console.cloud.google.com/), create/select a project and enable the **Google Drive API**.
-2. Configure the OAuth consent screen and add your Google account as a test user if the app is in Testing mode.
-3. Create an OAuth client with application type **Desktop app**. Download its JSON file to `secrets/google-oauth-client.json` beside `app.py` (or set `GOOGLE_OAUTH_CLIENT_FILE`). Keep this private; `secrets/` is git-ignored.
-4. Create three folders in the Google Drive account you want to use: Pre-wedding, Engagement, and Wedding. Copy each folder ID from its Drive URL: `https://drive.google.com/drive/folders/FOLDER_ID`.
-5. Run the authorization helper below. It opens Google sign-in in your browser and saves a private refresh token to `secrets/google-drive-token.json`. Authorize with the Google account whose Drive will store the photos. Google will ask to grant Drive access so the app can list and upload files in the configured folders.
+## 6. Built for phones
+Most guests will open the link from WhatsApp on a phone, so the page includes:
+- A bottom bar (Events, Venue, Photos, Wishes, Share) on phone-sized screens.
+- **Share:** opens the phone's share sheet, or WhatsApp directly, with a ready-written message in the guest's language.
+- **Add to calendar:** opens Apple Calendar on iPhones and Google Calendar everywhere else.
+- **On event days:** a banner at the top shows what is happening today, with a link to it; event cards show "Today", "Happening now" or "Completed".
+- Hindi is chosen automatically for phones set to Hindi; guests can switch at any time.
+- Works on older phones (iOS 12+, older Android). If the page's script ever fails to load, guests see the full invitation without the envelope animation instead of a stuck screen.
+- The phone's Back button closes a full-screen photo instead of leaving the site, and music pauses when the guest switches apps.
+- The page asks search engines not to index it, so family photos and addresses stay out of Google; WhatsApp previews are unaffected.
 
-### Configure and run (Windows PowerShell)
-Set these environment variables, authorize your Google account once, then start Flask (replace the example values):
+## 7. Guest wishes
+Wishes are saved in `instance/wishes.db` (SQLite) and appear on the invitation straight away.
+
+To remove an inappropriate wish from your phone, set `WISHES_ADMIN_PASSWORD` and open `/admin/wishes` (for example https://your-site/admin/wishes). The page is switched off while the password is not set.
+
+From a terminal on the server you can also run:
 ```powershell
-$env:GOOGLE_DRIVE_PRE_WEDDING_FOLDER_ID = "your-pre-wedding-folder-id"
-$env:GOOGLE_DRIVE_ENGAGEMENT_FOLDER_ID = "your-engagement-folder-id"
-$env:GOOGLE_DRIVE_WEDDING_FOLDER_ID = "your-wedding-folder-id"
-$env:DRIVE_UPLOAD_PASSWORD = "choose-a-long-private-upload-password"
-$env:FLASK_SECRET_KEY = "use-a-long-random-secret"
-pip install -r requirements.txt
-python authorize_google_drive.py
-python app.py
+flask --app app list-wishes
+flask --app app delete-wish 12
 ```
 
-JPG, JPEG, PNG, GIF, and WebP images up to 20 MB each are accepted; upload up to 10 photos per submission. The upload password is checked server-side. The Drive OAuth token grants the app access to the authorized account, so protect it like a password. Album photos are served by the website and are visible to its visitors. Never commit the OAuth client JSON, token file, or passwords. Deploy only over HTTPS and configure the token as a private secret file on your host. Google OAuth consent-screen Testing mode may expire refresh tokens after seven days; follow Google's publishing and verification requirements for longer-lived public use.
+## 8. QR cards for the venue
+Open http://127.0.0.1:5000/qr for printable QR cards linking to the invitation and each shared photo album. Set `SITE_URL` (below) before printing so the codes point at your public address.
 
-## 6. Publish it
-Deploy the Flask app to a Python-compatible hosting provider. Configure the Drive settings above as private environment variables, provide the OAuth token file using your host's secret-file mechanism, use HTTPS, and turn off debug mode in production.
+## 9. Publish it
+Deploy to any Python host and run it with a WSGI server, for example `waitress-serve --port=8000 app:app` or `gunicorn app:app`. Set these environment variables:
+- `FLASK_SECRET_KEY`: a long random string.
+- `SITE_URL`: your public address, such as `https://priyanka-ankoosh.in`. Used for WhatsApp previews and QR codes. When it starts with `https://`, the session cookie is HTTPS-only, so don't set it while testing on `http://127.0.0.1`.
+- `WISHES_ADMIN_PASSWORD`: a long password for `/admin/wishes`.
+
+Make sure the `instance/` folder is on persistent storage, or guest wishes will be lost when the host restarts. Use HTTPS. Never set `FLASK_DEBUG=1` on a public host.

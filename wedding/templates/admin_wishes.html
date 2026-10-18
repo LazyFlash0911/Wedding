@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="color-scheme" content="only light">
+  <title>Manage Wishes — Priyanka & Ankoosh</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;600&family=Noto+Sans+Devanagari:wght@400;600&family=Playfair+Display:wght@500&display=swap">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body class="admin-page">
+  <header class="admin-header">
+    <h1>Guest wishes</h1>
+    {% if logged_in %}
+      <form method="post" action="{{ url_for('admin_logout') }}">
+        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+        <button class="ghost-button" type="submit">Log out</button>
+      </form>
+    {% endif %}
+  </header>
+
+  {% if not logged_in %}
+    <form class="wish-form admin-login" method="post">
+      <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+      <label for="admin-password">Password</label>
+      <input id="admin-password" name="password" type="password" autocomplete="current-password" required autofocus>
+      {% if error %}<p class="flash error">{{ error }}</p>{% endif %}
+      <button class="open-invite" type="submit">Log in</button>
+    </form>
+  {% else %}
+    <p class="admin-count">{{ wishes | length }} wish{{ '' if wishes | length == 1 else 'es' }}. Removing one takes it off the invitation straight away.</p>
+    <div class="admin-list">
+      {% for wish in wishes %}
+        <article class="wish-card admin-wish">
+          <blockquote>{{ wish.message }}</blockquote>
+          <figcaption>— {{ wish.name }} <small>{{ wish.created_at[:16] | replace('T', ' ') }} UTC</small></figcaption>
+          <form method="post" action="{{ url_for('admin_delete_wish', wish_id=wish.id) }}"
+                onsubmit="return confirm('Remove this wish from the invitation?');">
+            <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+            <button class="admin-delete" type="submit">Remove</button>
+          </form>
+        </article>
+      {% else %}
+        <p class="wish-empty">No wishes yet.</p>
+      {% endfor %}
+    </div>
+  {% endif %}
+</body>
+</html>

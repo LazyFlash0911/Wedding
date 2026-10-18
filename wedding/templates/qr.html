@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex">
+  <title>QR Cards — Priyanka & Ankoosh</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Playfair+Display:ital,wght@0,400;0,500;1,400&display=swap">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body class="qr-page">
+  <header class="qr-header">
+    <h1>QR cards for the venue</h1>
+    <p>Print this page and place the cards on tables or at the entrance. Each card works on its own.</p>
+    <button class="open-invite" type="button" onclick="window.print()">Print cards</button>
+  </header>
+  <main class="qr-grid">
+    {% for code in codes %}
+      <article class="qr-card">
+        <p class="eyebrow">PRIYANKA ✿ ANKOOSH · 09.12.2026</p>
+        <h2>{{ code.title }}</h2>
+        <div class="qr-code">{{ code.svg }}</div>
+        <p class="qr-subtitle">{{ code.subtitle }}</p>
+      </article>
+    {% endfor %}
+  </main>
+</body>
+</html>

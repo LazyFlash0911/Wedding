@@ -1,356 +1,673 @@
 import hmac
-import io
 import os
+import re
 import secrets
-from functools import lru_cache
+import sqlite3
+import threading
+import time
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from urllib.parse import urlencode
 
-from flask import Flask, flash, jsonify, redirect, render_template, request, send_file, url_for
-from google.auth.exceptions import GoogleAuthError
-from google.auth.transport.requests import Request as GoogleAuthRequest
-from google.oauth2.credentials import Credentials
-from googleapiclient.discovery import build
-from googleapiclient.errors import HttpError
-from googleapiclient.http import MediaIoBaseDownload, MediaIoBaseUpload
-from werkzeug.utils import secure_filename
-
-app = Flask(__name__)
-app.secret_key = os.environ.get("FLASK_SECRET_KEY") or secrets.token_hex(32)
-app.config["MAX_CONTENT_LENGTH"] = 64 * 1024 * 1024
+import click
+import qrcode
+import qrcode.image.svg
+from flask import (
+    Flask,
+    Response,
+    abort,
+    flash,
+    g,
+    get_flashed_messages,
+    redirect,
+    render_template,
+    request,
+    session,
+    url_for,
+)
+from markupsafe import Markup
+from PIL import Image, ImageOps
+from werkzeug.middleware.proxy_fix import ProxyFix
 
 PROJECT_FOLDER = Path(__file__).resolve().parent
-DRIVE_TOKEN_FILE = Path(
-    os.environ.get(
-        "GOOGLE_DRIVE_TOKEN_FILE",
-        str(PROJECT_FOLDER / "secrets" / "google-drive-token.json"),
-    )
+STATIC_FOLDER = PROJECT_FOLDER / "static"
+IMAGE_FOLDER = STATIC_FOLDER / "images"
+GENERATED_FOLDER = STATIC_FOLDER / "generated"
+INSTANCE_FOLDER = PROJECT_FOLDER / "instance"
+WISHES_DB = INSTANCE_FOLDER / "wishes.db"
+
+
+def load_secret_key():
+    """Use FLASK_SECRET_KEY, or a key saved once in instance/ so it survives restarts."""
+    key = os.environ.get("FLASK_SECRET_KEY")
+    if key:
+        return key
+    INSTANCE_FOLDER.mkdir(exist_ok=True)
+    key_file = INSTANCE_FOLDER / "secret_key"
+    if not key_file.is_file():
+        key_file.write_text(secrets.token_hex(32), encoding="utf-8")
+    return key_file.read_text(encoding="utf-8").strip()
+
+
+# Optional: the public address of the site (e.g. https://priyanka-ankoosh.in), used for
+# WhatsApp link previews and QR codes. Defaults to the address the page was opened with.
+SITE_URL = os.environ.get("SITE_URL", "").rstrip("/")
+
+# Optional: a password for /admin/wishes, where inappropriate wishes can be removed.
+# The admin page is switched off while this is empty.
+WISHES_ADMIN_PASSWORD = os.environ.get("WISHES_ADMIN_PASSWORD", "")
+
+app = Flask(__name__)
+app.secret_key = load_secret_key()
+app.config.update(
+    MAX_CONTENT_LENGTH=64 * 1024,
+    SESSION_COOKIE_SAMESITE="Lax",
+    SESSION_COOKIE_SECURE=SITE_URL.startswith("https://"),
 )
-DRIVE_SCOPES = ["https://www.googleapis.com/auth/drive"]
-DRIVE_UPLOAD_PASSWORD = os.environ.get("DRIVE_UPLOAD_PASSWORD", "")
-DRIVE_CATEGORIES = [
-    {"id": "pre-wedding", "title": "Pre-wedding"},
-    {"id": "engagement", "title": "Engagement"},
-    {"id": "wedding", "title": "Wedding"},
-]
-DRIVE_FOLDER_ENV_VARS = {
-    "pre-wedding": "GOOGLE_DRIVE_PRE_WEDDING_FOLDER_ID",
-    "engagement": "GOOGLE_DRIVE_ENGAGEMENT_FOLDER_ID",
-    "wedding": "GOOGLE_DRIVE_WEDDING_FOLDER_ID",
-}
-ALLOWED_DRIVE_IMAGES = {
-    ".jpg": ("image/jpeg", lambda data: data.startswith(b"\xff\xd8\xff")),
-    ".jpeg": ("image/jpeg", lambda data: data.startswith(b"\xff\xd8\xff")),
-    ".png": ("image/png", lambda data: data.startswith(b"\x89PNG\r\n\x1a\n")),
-    ".gif": ("image/gif", lambda data: data.startswith((b"GIF87a", b"GIF89a"))),
-    ".webp": (
-        "image/webp",
-        lambda data: len(data) >= 12 and data[:4] == b"RIFF" and data[8:12] == b"WEBP",
-    ),
-}
-MAX_DRIVE_IMAGE_SIZE = 20 * 1024 * 1024
+# Hosting platforms put the app behind a proxy; this keeps https:// in generated links.
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
 
-STATIC_IMAGE_FOLDER = os.path.join(os.path.dirname(__file__), "static", "images")
-FAMILY_IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".gif", ".webp"}
-
-FAMILY_GROUPS = [
-    {"id": "groom-parents", "title": "Groom's Parents"},
-    {"id": "bride-parents", "title": "Bride's Parents"},
-    {"id": "groom-siblings", "title": "Groom's Siblings"},
-    {"id": "bride-siblings", "title": "Bride's Siblings"},
-    {"id": "groom-grandparents", "title": "Groom's Grandparents"},
-    {"id": "bride-grandparents", "title": "Bride's Grandparents"},
-]
+IST = timezone(timedelta(hours=5, minutes=30))
+IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".gif", ".webp"}
+IMAGE_SIZES = {"thumb": 600, "medium": 1100, "large": 1920}
 
 WEDDING = {
     "partner_one": "Priyanka Yadav",
+    "partner_one_hi": "प्रियंका यादव",
     "partner_two": "Ankoosh Yadav",
+    "partner_two_hi": "अंकुश यादव",
     "date_text": "Wednesday, 9 December 2026",
+    "date_text_hi": "बुधवार, 9 दिसंबर 2026",
     "date_iso": "2026-12-09T17:00:00+05:30",
-    "venue": "Coco Island",
-    "address": "Coco Island, Marve Village, Malad West, Malad, Mumbai, Maharashtra 400095",
+    "venue": "coco-island",
     "ceremony_time": "5:00 PM onwards",
+    "ceremony_time_hi": "शाम 5:00 बजे से",
 }
 
+VENUES = {
+    "club-aquaria": {
+        "name": "Club Aquaria",
+        "name_hi": "क्लब एक्वेरिया",
+        "address": "Club Aquaria, Shanti Ashram, Devidas Cross Ln, near St.Lawrence High School, LIC Colony, Borivali West, Mumbai, Maharashtra 400103",
+        "tip": "Nearest local station: Borivali (Western line).",
+        "tip_hi": "नज़दीकी लोकल स्टेशन: बोरीवली (वेस्टर्न लाइन)।",
+    },
+    "sai-palace": {
+        "name": "Hotel Sai Palace Grand",
+        "name_hi": "होटल साई पैलेस ग्रैंड",
+        "address": "Hotel Sai Palace Grand, Link Rd, Malad, Evershine Nagar, Malad West, Mumbai, Maharashtra 400064",
+        "tip": "Nearest local station: Malad (Western line).",
+        "tip_hi": "नज़दीकी लोकल स्टेशन: मलाड (वेस्टर्न लाइन)।",
+    },
+    "coco-island": {
+        "name": "Coco Island",
+        "name_hi": "कोको आइलैंड",
+        "address": "Coco Island, Marve Village, Malad West, Malad, Mumbai, Maharashtra 400095",
+        "tip": "Nearest local station: Malad (Western line), then a cab or auto towards Marve.",
+        "tip_hi": "नज़दीकी लोकल स्टेशन: मलाड (वेस्टर्न लाइन), वहाँ से मार्वे की ओर कैब या ऑटो लें।",
+    },
+}
+
+# start/end are used for "Add to calendar". End times are estimates; adjust as needed.
 EVENTS = [
     {
         "id": "sangeet",
         "name": "Sangeet",
-        "short_name": "Sangeet",
+        "name_hi": "संगीत",
         "subtitle": "One evening, two hearts, endless dancing",
+        "subtitle_hi": "एक शाम, दो दिल, अनगिनत थिरकते कदम",
         "date": "Monday, 7 December 2026",
+        "date_hi": "सोमवार, 7 दिसंबर 2026",
         "time": "6:00 PM",
-        "venue": "Club Aquaria",
-        "address": "Club Aquaria, Shanti Ashram, Devidas Cross Ln, near St.Lawrence High School, LIC Colony, Borivali West, Mumbai, Maharashtra 400103",
+        "time_hi": "शाम 6:00 बजे",
+        "start": datetime(2026, 12, 7, 18, 0, tzinfo=IST),
+        "end": datetime(2026, 12, 7, 23, 0, tzinfo=IST),
+        "venue": "club-aquaria",
         "icon": "♪",
         "description": "An evening of music, dance, laughter, and celebration with both families.",
-        "accent": "rose",
+        "description_hi": "दोनों परिवारों के साथ संगीत, नृत्य, हँसी और उत्सव से भरी एक शाम।",
+        "dress_code": "Festive glam: Indo-western, lehengas or sharp kurtas",
+        "dress_code_hi": "उत्सवी अंदाज़: इंडो-वेस्टर्न, लहंगा या शानदार कुर्ता",
+        "accent": "plum",
     },
     {
         "id": "groom-haldi",
         "name": "Ankoosh's Haldi",
-        "short_name": "Groom's Haldi",
+        "name_hi": "अंकुश की हल्दी",
         "subtitle": "A golden beginning for the groom",
+        "subtitle_hi": "दूल्हे के लिए एक सुनहरी शुरुआत",
         "date": "Tuesday, 8 December 2026",
+        "date_hi": "मंगलवार, 8 दिसंबर 2026",
         "time": "6:00 PM",
-        "venue": "Club Aquaria",
-        "address": "Club Aquaria, Shanti Ashram, Devidas Cross Ln, near St.Lawrence High School, LIC Colony, Borivali West, Mumbai, Maharashtra 400103",
+        "time_hi": "शाम 6:00 बजे",
+        "start": datetime(2026, 12, 8, 18, 0, tzinfo=IST),
+        "end": datetime(2026, 12, 8, 22, 0, tzinfo=IST),
+        "venue": "club-aquaria",
         "icon": "✿",
         "description": "Traditional rituals, joyful blessings, and happy moments with Ankoosh's loved ones.",
-        "accent": "sage",
+        "description_hi": "अंकुश के अपनों के साथ पारंपरिक रस्में, आशीर्वाद और खुशियों भरे पल।",
+        "dress_code": "Shades of yellow: wear something you don't mind getting haldi on",
+        "dress_code_hi": "पीले रंग के परिधान: ऐसे कपड़े पहनें जिन पर हल्दी लग जाए तो चिंता न हो",
+        "accent": "gold",
     },
     {
         "id": "bride-haldi",
         "name": "Priyanka's Haldi",
-        "short_name": "Bride's Haldi",
+        "name_hi": "प्रियंका की हल्दी",
         "subtitle": "A golden beginning for the bride",
+        "subtitle_hi": "दुल्हन के लिए एक सुनहरी शुरुआत",
         "date": "Wednesday, 9 December 2026",
+        "date_hi": "बुधवार, 9 दिसंबर 2026",
         "time": "9:00 AM",
-        "venue": "Hotel Sai Palace Grand",
-        "address": "Hotel Sai Palace Grand, Link Rd, Malad, Evershine Nagar, Malad West, Mumbai, Maharashtra 400064",
+        "time_hi": "सुबह 9:00 बजे",
+        "start": datetime(2026, 12, 9, 9, 0, tzinfo=IST),
+        "end": datetime(2026, 12, 9, 12, 0, tzinfo=IST),
+        "venue": "sai-palace",
         "icon": "✿",
         "description": "A beautiful morning of flowers, traditional rituals, and family blessings for Priyanka.",
-        "accent": "gold",
+        "description_hi": "प्रियंका के लिए फूलों, पारंपरिक रस्मों और परिवार के आशीर्वाद से सजी एक सुंदर सुबह।",
+        "dress_code": "Shades of yellow: wear something you don't mind getting haldi on",
+        "dress_code_hi": "पीले रंग के परिधान: ऐसे कपड़े पहनें जिन पर हल्दी लग जाए तो चिंता न हो",
+        "accent": "marigold",
+    },
+    {
+        "id": "wedding",
+        "name": "The Wedding",
+        "name_hi": "शुभ विवाह",
+        "subtitle": "Two families, one forever",
+        "subtitle_hi": "दो परिवार, एक नया सफ़र",
+        "date": "Wednesday, 9 December 2026",
+        "date_hi": "बुधवार, 9 दिसंबर 2026",
+        "time": "5:00 PM onwards",
+        "time_hi": "शाम 5:00 बजे से",
+        "start": datetime(2026, 12, 9, 17, 0, tzinfo=IST),
+        "end": datetime(2026, 12, 9, 23, 0, tzinfo=IST),
+        "venue": "coco-island",
+        "icon": "❦",
+        "description": "Join us as we take our pheras and begin our new life together, surrounded by the people we love.",
+        "description_hi": "अपनों के बीच हमारे फेरों और नए जीवन की शुरुआत के साक्षी बनें।",
+        "dress_code": "Traditional Indian attire",
+        "dress_code_hi": "पारंपरिक भारतीय परिधान",
+        "accent": "crimson",
     },
 ]
+EVENTS_BY_ID = {event["id"]: event for event in EVENTS}
 
-GALLERY = [
+# Optional names shown under each family portrait, e.g. "Mr. & Mrs. Yadav".
+# Photos are read from static/images/<id>-1.jpg, <id>-2.jpg, ...
+FAMILY_GROUPS = [
+    {"id": "groom-parents", "title": "Groom's Parents", "title_hi": "दूल्हे के माता-पिता", "names": "", "names_hi": ""},
+    {"id": "bride-parents", "title": "Bride's Parents", "title_hi": "दुल्हन के माता-पिता", "names": "", "names_hi": ""},
+    {"id": "groom-siblings", "title": "Groom's Siblings", "title_hi": "दूल्हे के भाई-बहन", "names": "", "names_hi": ""},
+    {"id": "bride-siblings", "title": "Bride's Siblings", "title_hi": "दुल्हन के भाई-बहन", "names": "", "names_hi": ""},
+    {"id": "groom-grandparents", "title": "Groom's Grandparents", "title_hi": "दूल्हे के दादा-दादी", "names": "", "names_hi": ""},
+    {"id": "bride-grandparents", "title": "Bride's Grandparents", "title_hi": "दुल्हन के दादा-दादी", "names": "", "names_hi": ""},
+]
+
+# Captions for static/images/couple-1.jpg, couple-2.jpg, ... in order.
+MEMORY_CAPTIONS = [
     {
         "title": "A little bit of magic",
-        "caption": "Replace this card with one of your favourite couple photos.",
-        "image": "images/couple-1.JPG",
-        "position": "center",
+        "title_hi": "थोड़ा सा जादू",
+        "caption": "Every love story is beautiful, but ours is our favourite.",
+        "caption_hi": "हर प्रेम कहानी खूबसूरत होती है, पर हमारी हमें सबसे प्यारी है।",
     },
     {
         "title": "Our favourite memories",
-        "caption": "Add a candid, a favourite trip, or a special moment.",
-        "image": "images/couple-2.JPG",
-        "position": "center",
+        "title_hi": "हमारी सबसे प्यारी यादें",
+        "caption": "Little moments that turned into the best chapters of our story.",
+        "caption_hi": "छोटे-छोटे पल, जो हमारी कहानी के सबसे खूबसूरत अध्याय बन गए।",
     },
     {
         "title": "The beginning of forever",
-        "caption": "One more photo to make this invitation yours.",
-        "image": "images/couple-3.JPG",
-        "position": "center",
+        "title_hi": "हमेशा की शुरुआत",
+        "caption": "Hand in hand, ready for the adventure of a lifetime.",
+        "caption_hi": "हाथों में हाथ, ज़िंदगी भर के सफ़र के लिए तैयार।",
     },
 ]
 
+# Google Drive album links. Leave "url" empty until an album is ready to share.
+PHOTO_ALBUMS = [
+    {
+        "id": "pre-wedding",
+        "title": "Pre-wedding",
+        "title_hi": "प्री-वेडिंग",
+        "url": "https://drive.google.com/drive/folders/1nMtn7yWR-Tb8Q5sLMuur7yge8txNjLIs?usp=drive_link",
+    },
+    {
+        "id": "engagement",
+        "title": "Engagement",
+        "title_hi": "सगाई",
+        "url": "https://drive.google.com/drive/folders/1jylBAKrPNjuR-6OotSnrbMc2mDB5xFb0?usp=drive_link",
+    },
+    {"id": "wedding", "title": "Wedding", "title_hi": "विवाह", "url": ""},
+]
 
-def drive_configuration_error():
-    if not Path(DRIVE_TOKEN_FILE).is_file():
-        return "Google Drive is not connected yet. The site owner must authorize their Google account."
-    if not DRIVE_UPLOAD_PASSWORD:
-        return "Google Drive uploads are not enabled: set DRIVE_UPLOAD_PASSWORD."
-    if any(not get_drive_folder_id(category["id"]) for category in DRIVE_CATEGORIES):
-        return "Google Drive uploads are not enabled: configure all three album folder IDs."
-    return None
+# Optional hotels for out-of-town guests. Each section is hidden while its list is empty.
+# Example: {"name": "Hotel Name", "note": "5 min from Coco Island", "note_hi": "...", "url": "https://..."}
+STAYS = []
 
+# Optional contacts for guests. Example: {"name": "Rahul (Groom's brother)", "name_hi": "...", "phone": "+91 98xxxxxxxx"}
+CONTACTS = []
 
-@lru_cache(maxsize=1)
-def get_drive_service():
-    credentials = Credentials.from_authorized_user_file(
-        str(DRIVE_TOKEN_FILE), scopes=DRIVE_SCOPES
-    )
-    if credentials.expired and credentials.refresh_token:
-        credentials.refresh(GoogleAuthRequest())
-        Path(DRIVE_TOKEN_FILE).write_text(credentials.to_json(), encoding="utf-8")
-    return build("drive", "v3", credentials=credentials, cache_discovery=False)
-
-
-def get_drive_folder_id(category):
-    env_name = DRIVE_FOLDER_ENV_VARS.get(category)
-    return os.environ.get(env_name, "") if env_name else ""
-
-
-def is_valid_drive_image(upload):
-    extension = Path(secure_filename(upload.filename or "")).suffix.lower()
-    image_info = ALLOWED_DRIVE_IMAGES.get(extension)
-    if image_info is None:
-        return None
-
-    upload.stream.seek(0, os.SEEK_END)
-    file_size = upload.stream.tell()
-    upload.stream.seek(0)
-    if file_size == 0 or file_size > MAX_DRIVE_IMAGE_SIZE:
-        return None
-
-    header = upload.stream.read(12)
-    upload.stream.seek(0)
-    mime_type, signature_check = image_info
-    return mime_type if signature_check(header) else None
+# Messages flashed after a wish is submitted, in both languages.
+FLASH_MESSAGES = {
+    "wish-saved": ("Thank you! Your blessing has been added.", "धन्यवाद! आपका आशीर्वाद जुड़ गया है।"),
+    "wish-missing": ("Please add your name and a message.", "कृपया अपना नाम और संदेश लिखें।"),
+    "wish-too-long": ("Please keep your name under 60 and your message under 500 characters.", "कृपया नाम 60 और संदेश 500 अक्षरों से कम रखें।"),
+    "wish-too-soon": ("Please wait a moment before sending another blessing.", "कृपया अगला संदेश भेजने से पहले थोड़ा रुकें।"),
+}
+MAX_WISH_NAME = 60
+MAX_WISH_MESSAGE = 500
 
 
-def get_family_groups_with_photos():
-    family_groups = []
+def natural_key(filename):
+    return [int(part) if part.isdigit() else part.casefold() for part in re.split(r"(\d+)", filename)]
+
+
+def list_images(prefix):
     try:
-        filenames = os.listdir(STATIC_IMAGE_FOLDER)
+        filenames = os.listdir(IMAGE_FOLDER)
     except OSError:
-        filenames = []
+        return []
+    return sorted(
+        (
+            name
+            for name in filenames
+            if name.casefold().startswith(prefix)
+            and Path(name).suffix.lower() in IMAGE_EXTENSIONS
+            and (IMAGE_FOLDER / name).is_file()
+        ),
+        key=natural_key,
+    )
 
+
+def save_jpeg(image, target):
+    temporary = target.with_name(f"{target.stem}.{os.getpid()}.{threading.get_ident()}.tmp")
+    image.save(temporary, "JPEG", quality=82, optimize=True, progressive=True)
+    os.replace(temporary, target)
+
+
+def web_image(filename, size):
+    """Static path of a resized, correctly rotated copy of an image, created on first use."""
+    source = IMAGE_FOLDER / filename
+    target = GENERATED_FOLDER / f"{Path(filename).stem}-{size}.jpg"
+    try:
+        if not target.is_file() or target.stat().st_mtime < source.stat().st_mtime:
+            GENERATED_FOLDER.mkdir(exist_ok=True)
+            max_side = IMAGE_SIZES[size]
+            with Image.open(source) as image:
+                image.draft("RGB", (max_side, max_side))
+                image = ImageOps.exif_transpose(image).convert("RGB")
+                image.thumbnail((max_side, max_side))
+                save_jpeg(image, target)
+    except OSError:
+        app.logger.exception("Could not resize %s", filename)
+        return f"images/{filename}"
+    return f"generated/{target.name}"
+
+
+def share_image(filename):
+    """A 1200×630 crop for WhatsApp and social link previews."""
+    source = IMAGE_FOLDER / filename
+    target = GENERATED_FOLDER / "share-preview.jpg"
+    try:
+        if not target.is_file() or target.stat().st_mtime < source.stat().st_mtime:
+            GENERATED_FOLDER.mkdir(exist_ok=True)
+            with Image.open(source) as image:
+                image.draft("RGB", (2400, 2400))
+                image = ImageOps.exif_transpose(image).convert("RGB")
+                save_jpeg(ImageOps.fit(image, (1200, 630), centering=(0.5, 0.4)), target)
+    except OSError:
+        app.logger.exception("Could not create the share preview image")
+        return None
+    return f"generated/{target.name}"
+
+
+def touch_icon(filename):
+    """A square icon for phones' home screens and bookmarks."""
+    source = IMAGE_FOLDER / filename
+    target = GENERATED_FOLDER / "touch-icon.png"
+    try:
+        if not target.is_file() or target.stat().st_mtime < source.stat().st_mtime:
+            GENERATED_FOLDER.mkdir(exist_ok=True)
+            with Image.open(source) as image:
+                image.draft("RGB", (720, 720))
+                image = ImageOps.exif_transpose(image).convert("RGB")
+                ImageOps.fit(image, (180, 180), centering=(0.5, 0.3)).save(target, "PNG", optimize=True)
+    except OSError:
+        app.logger.exception("Could not create the touch icon")
+        return None
+    return f"generated/{target.name}"
+
+
+def prepare_images():
+    """Resize every photo ahead of time, so the first guest to open the link doesn't wait."""
+    couple = list_images("couple-")
+    for name in couple:
+        web_image(name, "medium")
+        web_image(name, "large")
     for group in FAMILY_GROUPS:
-        filename_prefix = f"{group['id']}-"
-        photos = [
-            {"filename": f"images/{filename}"}
-            for filename in sorted(filenames, key=str.casefold)
-            if filename.casefold().startswith(filename_prefix)
-            and os.path.splitext(filename)[1].lower() in FAMILY_IMAGE_EXTENSIONS
-            and os.path.isfile(os.path.join(STATIC_IMAGE_FOLDER, filename))
-        ]
-        family_groups.append({**group, "photos": photos})
+        for name in list_images(f"{group['id']}-"):
+            web_image(name, "thumb")
+            web_image(name, "large")
+    if couple:
+        share_image(couple[0])
+        touch_icon(couple[0])
 
-    return family_groups
+
+def csrf_token():
+    if "csrf" not in session:
+        session["csrf"] = secrets.token_urlsafe(32)
+    return session["csrf"]
+
+
+def csrf_valid():
+    return hmac.compare_digest(request.form.get("csrf_token", ""), session.get("csrf", ""))
+
+
+app.jinja_env.globals["csrf_token"] = csrf_token
+
+
+def site_url():
+    return SITE_URL or request.url_root.rstrip("/")
+
+
+def absolute_static(path):
+    return site_url() + url_for("static", filename=path)
+
+
+def utc_stamp(moment):
+    return moment.astimezone(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+
+
+def google_calendar_url(event):
+    venue = VENUES[event["venue"]]
+    return "https://calendar.google.com/calendar/render?" + urlencode(
+        {
+            "action": "TEMPLATE",
+            "text": f"{event['name']} · Priyanka & Ankoosh",
+            "dates": f"{utc_stamp(event['start'])}/{utc_stamp(event['end'])}",
+            "details": event["description"],
+            "location": venue["address"],
+        }
+    )
+
+
+def get_family_groups():
+    groups = []
+    for group in FAMILY_GROUPS:
+        photos = [
+            {"thumb": web_image(name, "thumb"), "large": web_image(name, "large")}
+            for name in list_images(f"{group['id']}-")
+        ]
+        if photos:
+            groups.append({**group, "photos": photos})
+    return groups
+
+
+def get_memories():
+    memories = []
+    for index, name in enumerate(list_images("couple-")):
+        caption = MEMORY_CAPTIONS[index] if index < len(MEMORY_CAPTIONS) else {}
+        memories.append(
+            {
+                "file": name,
+                "src": url_for("static", filename=web_image(name, "medium")),
+                "large": url_for("static", filename=web_image(name, "large")),
+                "title": caption.get("title", ""),
+                "title_hi": caption.get("title_hi", ""),
+                "caption": caption.get("caption", ""),
+                "caption_hi": caption.get("caption_hi", ""),
+            }
+        )
+    return memories
+
+
+def get_event_days():
+    days = []
+    for event in sorted(EVENTS, key=lambda item: item["start"]):
+        if not days or days[-1]["date"] != event["date"]:
+            days.append({"date": event["date"], "date_hi": event["date_hi"], "events": []})
+        days[-1]["events"].append({**event, "google_calendar_url": google_calendar_url(event)})
+    return days
+
+
+def get_venues():
+    return [
+        {**venue, "id": venue_id, "events": [event for event in EVENTS if event["venue"] == venue_id]}
+        for venue_id, venue in VENUES.items()
+    ]
+
+
+def get_db():
+    if "db" not in g:
+        INSTANCE_FOLDER.mkdir(exist_ok=True)
+        g.db = sqlite3.connect(WISHES_DB)
+        g.db.row_factory = sqlite3.Row
+        g.db.execute(
+            "CREATE TABLE IF NOT EXISTS wishes ("
+            "id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, "
+            "message TEXT NOT NULL, created_at TEXT NOT NULL)"
+        )
+    return g.db
+
+
+@app.teardown_appcontext
+def close_db(_error):
+    db = g.pop("db", None)
+    if db is not None:
+        db.close()
 
 
 @app.get("/")
 def index():
+    memories = get_memories()
+    preview = share_image(memories[0]["file"]) if memories else None
+    icon = touch_icon(memories[0]["file"]) if memories else None
+    flashes = [
+        {"category": category, "en": FLASH_MESSAGES[key][0], "hi": FLASH_MESSAGES[key][1]}
+        for category, key in get_flashed_messages(with_categories=True)
+        if key in FLASH_MESSAGES
+    ]
+    wishes = get_db().execute(
+        "SELECT name, message FROM wishes ORDER BY id DESC LIMIT 60"
+    ).fetchall()
+    music_file = STATIC_FOLDER / "music.mp3"
     return render_template(
         "index.html",
         wedding=WEDDING,
-        events=EVENTS,
-        gallery=GALLERY,
-        family_groups=get_family_groups_with_photos(),
-        drive_categories=DRIVE_CATEGORIES,
-        drive_upload_enabled=drive_configuration_error() is None,
+        wedding_venue=VENUES[WEDDING["venue"]],
+        wedding_event=EVENTS_BY_ID["wedding"],
+        wedding_calendar_url=google_calendar_url(EVENTS_BY_ID["wedding"]),
+        event_days=get_event_days(),
+        venues=get_venues(),
+        family_groups=get_family_groups(),
+        memories=memories,
+        albums=PHOTO_ALBUMS,
+        stays=STAYS,
+        contacts=CONTACTS,
+        wishes=wishes,
+        flashes=flashes,
+        page_url=site_url() + "/",
+        preview_image_url=absolute_static(preview) if preview else None,
+        touch_icon_url=url_for("static", filename=icon) if icon else None,
+        music_url=url_for("static", filename="music.mp3") if music_file.is_file() else None,
     )
 
 
-@app.get("/api/drive/photos/<category>")
-def list_drive_photos(category):
-    folder_id = get_drive_folder_id(category)
-    if not any(item["id"] == category for item in DRIVE_CATEGORIES):
-        return jsonify({"error": "Unknown photo category."}), 404
-    if not folder_id:
-        return jsonify({"error": f"The Google Drive folder for {category} is not configured."}), 503
-    if not Path(DRIVE_TOKEN_FILE).is_file():
-        return jsonify({"error": "Google Drive is not configured on this server."}), 503
+@app.post("/wishes")
+def add_wish():
+    back = redirect(url_for("index") + "#wishes")
+    if request.form.get("website") or not csrf_valid():  # Bots fill the hidden field; forged posts lack the token.
+        return back
 
-    try:
-        service = get_drive_service()
-        response = service.files().list(
-            q=f"'{folder_id}' in parents and trashed = false and mimeType contains 'image/'",
-            pageSize=100,
-            orderBy="name",
-            fields="files(id,name,mimeType)",
-            includeItemsFromAllDrives=True,
-            supportsAllDrives=True,
-        ).execute()
-    except (GoogleAuthError, HttpError, OSError, ValueError):
-        app.logger.exception("Failed to list Google Drive wedding photos")
-        return jsonify({"error": "Could not load photos from Google Drive."}), 502
+    name = " ".join(request.form.get("name", "").split())
+    message = request.form.get("message", "").strip()
+    if not name or not message:
+        flash("wish-missing", "error")
+        return back
+    if len(name) > MAX_WISH_NAME or len(message) > MAX_WISH_MESSAGE:
+        flash("wish-too-long", "error")
+        return back
+    if time.time() - session.get("last_wish_at", 0) < 30:
+        flash("wish-too-soon", "error")
+        return back
 
-    photos = [
-        {
-            "id": photo["id"],
-            "name": photo.get("name", "Wedding photo"),
-            "url": url_for("drive_photo", file_id=photo["id"]),
-        }
-        for photo in response.get("files", [])
-        if photo.get("id")
+    db = get_db()
+    db.execute(
+        "INSERT INTO wishes (name, message, created_at) VALUES (?, ?, ?)",
+        (name, message, datetime.now(timezone.utc).isoformat(timespec="seconds")),
+    )
+    db.commit()
+    session["last_wish_at"] = time.time()
+    flash("wish-saved", "success")
+    return back
+
+
+def admin_enabled():
+    return bool(WISHES_ADMIN_PASSWORD)
+
+
+@app.route("/admin/wishes", methods=["GET", "POST"])
+def admin_wishes():
+    """Phone-friendly page for the couple to remove inappropriate wishes."""
+    if not admin_enabled():
+        abort(404)
+    error = None
+    if request.method == "POST":
+        if not csrf_valid():
+            abort(400)
+        if hmac.compare_digest(request.form.get("password", ""), WISHES_ADMIN_PASSWORD):
+            session["admin"] = True
+            return redirect(url_for("admin_wishes"))
+        time.sleep(1)  # Slow down password guessing.
+        error = "That password is not correct."
+    wishes = []
+    if session.get("admin"):
+        wishes = get_db().execute(
+            "SELECT id, name, message, created_at FROM wishes ORDER BY id DESC"
+        ).fetchall()
+    return render_template("admin_wishes.html", wishes=wishes, logged_in=session.get("admin", False), error=error)
+
+
+@app.post("/admin/wishes/<int:wish_id>/delete")
+def admin_delete_wish(wish_id):
+    if not admin_enabled() or not session.get("admin"):
+        abort(404)
+    if not csrf_valid():
+        abort(400)
+    db = get_db()
+    db.execute("DELETE FROM wishes WHERE id = ?", (wish_id,))
+    db.commit()
+    return redirect(url_for("admin_wishes"))
+
+
+@app.post("/admin/logout")
+def admin_logout():
+    if csrf_valid():
+        session.pop("admin", None)
+    return redirect(url_for("index"))
+
+
+def ics_escape(text):
+    return text.replace("\\", "\\\\").replace(";", "\\;").replace(",", "\\,").replace("\n", "\\n")
+
+
+def ics_fold(line):
+    """Fold calendar lines to 75 bytes, as the iCalendar format requires."""
+    parts, current = [], ""
+    for character in line:
+        limit = 75 if not parts else 74
+        if len((current + character).encode("utf-8")) > limit:
+            parts.append(current)
+            current = character
+        else:
+            current += character
+    parts.append(current)
+    return "\r\n ".join(parts)
+
+
+@app.get("/calendar/<event_id>.ics")
+def event_calendar(event_id):
+    event = EVENTS_BY_ID.get(event_id) or abort(404)
+    venue = VENUES[event["venue"]]
+    lines = [
+        "BEGIN:VCALENDAR",
+        "VERSION:2.0",
+        "PRODID:-//Priyanka & Ankoosh//Wedding Invitation//EN",
+        "CALSCALE:GREGORIAN",
+        "METHOD:PUBLISH",
+        "BEGIN:VEVENT",
+        f"UID:{event_id}-2026@priyanka-ankoosh-wedding",
+        f"DTSTAMP:{utc_stamp(datetime.now(timezone.utc))}",
+        f"DTSTART:{utc_stamp(event['start'])}",
+        f"DTEND:{utc_stamp(event['end'])}",
+        f"SUMMARY:{ics_escape(event['name'] + ' · Priyanka & Ankoosh')}",
+        f"LOCATION:{ics_escape(venue['address'])}",
+        f"DESCRIPTION:{ics_escape(event['description'])}",
+        "END:VEVENT",
+        "END:VCALENDAR",
     ]
-    return jsonify({"category": category, "photos": photos})
+    body = "\r\n".join(ics_fold(line) for line in lines) + "\r\n"
+    return Response(
+        body,
+        mimetype="text/calendar",
+        headers={"Content-Disposition": f'attachment; filename="{event_id}.ics"'},
+    )
 
 
-@app.get("/drive/photo/<file_id>")
-def drive_photo(file_id):
-    if not Path(DRIVE_TOKEN_FILE).is_file():
-        return "Google Drive is not configured.", 503
+def qr_svg(data):
+    image = qrcode.make(data, image_factory=qrcode.image.svg.SvgPathImage, border=2)
+    return Markup(image.to_string(encoding="unicode"))
 
-    try:
-        service = get_drive_service()
-        metadata = service.files().get(
-            fileId=file_id,
-            fields="id,mimeType,parents,size",
-            supportsAllDrives=True,
-        ).execute()
-        mime_type = metadata.get("mimeType", "")
-        if mime_type not in {entry[0] for entry in ALLOWED_DRIVE_IMAGES.values()}:
-            return "Not an image file.", 415
-        permitted_folders = {
-            folder_id
-            for category in DRIVE_CATEGORIES
-            if (folder_id := get_drive_folder_id(category["id"]))
+
+@app.get("/qr")
+def qr_codes():
+    """Printable QR cards for the venue: the invitation and each shared photo album."""
+    invitation_url = site_url() + "/"
+    codes = [
+        {
+            "title": "Our wedding invitation",
+            "subtitle": "Scan to open the invitation",
+            "url": invitation_url,
+            "svg": qr_svg(invitation_url),
         }
-        if not permitted_folders.intersection(metadata.get("parents", [])):
-            return "This image is outside the configured albums.", 404
-        if int(metadata.get("size", 0)) > MAX_DRIVE_IMAGE_SIZE:
-            return "This image is too large to display.", 413
-
-        buffer = io.BytesIO()
-        downloader = MediaIoBaseDownload(
-            buffer,
-            service.files().get_media(fileId=file_id, supportsAllDrives=True),
-        )
-        done = False
-        while not done:
-            _, done = downloader.next_chunk()
-        buffer.seek(0)
-    except (GoogleAuthError, HttpError, OSError, ValueError):
-        app.logger.exception("Failed to retrieve a Google Drive image")
-        return "Could not retrieve the image.", 502
-
-    return send_file(buffer, mimetype=mime_type, max_age=300, download_name="wedding-photo")
+    ]
+    codes += [
+        {
+            "title": f"{album['title']} photos",
+            "subtitle": "Scan to view the album",
+            "url": album["url"],
+            "svg": qr_svg(album["url"]),
+        }
+        for album in PHOTO_ALBUMS
+        if album["url"]
+    ]
+    return render_template("qr.html", codes=codes)
 
 
-@app.post("/drive/upload")
-def upload_drive_photos():
-    category = request.form.get("category", "")
-    if not any(item["id"] == category for item in DRIVE_CATEGORIES):
-        flash("Choose a valid photo category.", "error")
-        return redirect(url_for("index") + "#drive-gallery")
-
-    setup_error = drive_configuration_error()
-    if setup_error:
-        flash(setup_error, "error")
-        return redirect(url_for("index") + "#drive-gallery")
-
-    submitted_password = request.form.get("upload_password", "")
-    if not hmac.compare_digest(submitted_password, DRIVE_UPLOAD_PASSWORD):
-        flash("The Google Drive upload password is incorrect.", "error")
-        return redirect(url_for("index") + "#drive-gallery")
-
-    folder_id = get_drive_folder_id(category)
-    if not folder_id:
-        flash(f"Set the Google Drive folder ID for {category} on the server first.", "error")
-        return redirect(url_for("index") + "#drive-gallery")
-
-    uploads = [item for item in request.files.getlist("photos") if item and item.filename]
-    if not uploads:
-        flash("Choose at least one photo to upload.", "error")
-        return redirect(url_for("index") + "#drive-gallery")
-    if len(uploads) > 10:
-        flash("Upload no more than 10 photos at once.", "error")
-        return redirect(url_for("index") + "#drive-gallery")
-
-    validated_uploads = []
-    for upload in uploads:
-        mime_type = is_valid_drive_image(upload)
-        if mime_type is None:
-            flash("Use valid JPG, PNG, GIF, or WebP photos up to 20 MB each.", "error")
-            return redirect(url_for("index") + "#drive-gallery")
-        validated_uploads.append((upload, mime_type))
-
-    try:
-        service = get_drive_service()
-        for upload, mime_type in validated_uploads:
-            filename = secure_filename(upload.filename or "wedding-photo") or "wedding-photo"
-            service.files().create(
-                body={"name": filename, "parents": [folder_id]},
-                media_body=MediaIoBaseUpload(upload.stream, mimetype=mime_type, resumable=True),
-                fields="id",
-                supportsAllDrives=True,
-            ).execute()
-    except (GoogleAuthError, HttpError, OSError, ValueError):
-        app.logger.exception("Failed to upload wedding photos to Google Drive")
-        flash("Google Drive could not save the photos. Check the folder sharing and server setup.", "error")
-        return redirect(url_for("index") + "#drive-gallery")
-
-    flash(f"Uploaded {len(validated_uploads)} photo(s) to {category} in Google Drive.", "success")
-    return redirect(url_for("index") + "#drive-gallery")
+@app.cli.command("list-wishes")
+def list_wishes_command():
+    """Show all guest wishes with their IDs."""
+    with app.app_context():
+        for row in get_db().execute("SELECT id, created_at, name, message FROM wishes ORDER BY id"):
+            click.echo(f"{row['id']}\t{row['created_at']}\t{row['name']}: {row['message']}")
 
 
-@app.errorhandler(413)
-def drive_upload_too_large(_error):
-    flash("The upload is too large. Choose fewer or smaller photos.", "error")
-    return redirect(url_for("index") + "#drive-gallery")
+@app.cli.command("delete-wish")
+@click.argument("wish_id", type=int)
+def delete_wish_command(wish_id):
+    """Remove a guest wish by its ID (see list-wishes)."""
+    with app.app_context():
+        db = get_db()
+        deleted = db.execute("DELETE FROM wishes WHERE id = ?", (wish_id,)).rowcount
+        db.commit()
+    click.echo(f"Deleted wish {wish_id}." if deleted else f"No wish with ID {wish_id}.")
+
+
+threading.Thread(target=prepare_images, daemon=True).start()
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    # Set FLASK_DEBUG=1 while editing locally for auto-reload. Never enable it on a public host.
+    app.run(debug=os.environ.get("FLASK_DEBUG") == "1")
