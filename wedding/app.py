@@ -37,16 +37,33 @@ INSTANCE_FOLDER = PROJECT_FOLDER / "instance"
 WISHES_DB = INSTANCE_FOLDER / "wishes.db"
 
 
+# def load_secret_key():
+#     """Use FLASK_SECRET_KEY, or a key saved once in instance/ so it survives restarts."""
+#     key = os.environ.get("FLASK_SECRET_KEY")
+#     if key:
+#         return key
+#     INSTANCE_FOLDER.mkdir(exist_ok=True)
+#     key_file = INSTANCE_FOLDER / "secret_key"
+#     if not key_file.is_file():
+#         key_file.write_text(secrets.token_hex(32), encoding="utf-8")
+#     return key_file.read_text(encoding="utf-8").strip()
 def load_secret_key():
-    """Use FLASK_SECRET_KEY, or a key saved once in instance/ so it survives restarts."""
-    key = os.environ.get("FLASK_SECRET_KEY")
+    key = os.environ.get("SECRET_KEY")
     if key:
         return key
-    INSTANCE_FOLDER.mkdir(exist_ok=True)
-    key_file = INSTANCE_FOLDER / "secret_key"
-    if not key_file.is_file():
-        key_file.write_text(secrets.token_hex(32), encoding="utf-8")
-    return key_file.read_text(encoding="utf-8").strip()
+
+    # Local development fallback only
+    if not os.environ.get("VERCEL"):
+        instance = Path(__file__).parent / "instance"
+        instance.mkdir(exist_ok=True)
+        key_file = instance / "secret_key"
+        if key_file.exists():
+            return key_file.read_text().strip()
+        key = os.urandom(32).hex()
+        key_file.write_text(key)
+        return key
+
+    raise RuntimeError("SECRET_KEY environment variable is not set")
 
 
 # Optional: the public address of the site (e.g. https://priyanka-ankoosh.in), used for
