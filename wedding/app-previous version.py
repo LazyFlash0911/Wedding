@@ -33,7 +33,9 @@ PROJECT_FOLDER = Path(__file__).resolve().parent
 STATIC_FOLDER = PROJECT_FOLDER / "static"
 IMAGE_FOLDER = STATIC_FOLDER / "images"
 GENERATED_FOLDER = STATIC_FOLDER / "generated"
-INSTANCE_FOLDER = PROJECT_FOLDER / "instance"
+# Vercel's deployment folder is read-only; only /tmp is writable (and it is temporary).
+ON_VERCEL = bool(os.environ.get("VERCEL"))
+INSTANCE_FOLDER = Path("/tmp/instance") if ON_VERCEL else PROJECT_FOLDER / "instance"
 WISHES_DB = INSTANCE_FOLDER / "wishes.db"
 
 
@@ -269,6 +271,15 @@ MAX_WISH_NAME = 60
 MAX_WISH_MESSAGE = 500
 
 
+def needs_build(target, source):
+    """True if a generated image must be (re)created. On Vercel, ship pre-generated files and never rebuild."""
+    if not target.is_file():
+        return not ON_VERCEL
+    if ON_VERCEL:
+        return False
+    return target.stat().st_mtime < source.stat().st_mtime
+
+
 def natural_key(filename):
     return [int(part) if part.isdigit() else part.casefold() for part in re.split(r"(\d+)", filename)]
 
@@ -301,7 +312,7 @@ def web_image(filename, size):
     source = IMAGE_FOLDER / filename
     target = GENERATED_FOLDER / f"{Path(filename).stem}-{size}.jpg"
     try:
-        if not target.is_file() or target.stat().st_mtime < source.stat().st_mtime:
+        if needs_build(target, source):
             GENERATED_FOLDER.mkdir(exist_ok=True)
             max_side = IMAGE_SIZES[size]
             with Image.open(source) as image:
@@ -312,6 +323,8 @@ def web_image(filename, size):
     except OSError:
         app.logger.exception("Could not resize %s", filename)
         return f"images/{filename}"
+    if not target.is_file():  # e.g. read-only host with no pre-generated copy
+        return f"images/{filename}"
     return f"generated/{target.name}"
 
 
@@ -320,7 +333,7 @@ def share_image(filename):
     source = IMAGE_FOLDER / filename
     target = GENERATED_FOLDER / "share-preview.jpg"
     try:
-        if not target.is_file() or target.stat().st_mtime < source.stat().st_mtime:
+        if needs_build(target, source):
             GENERATED_FOLDER.mkdir(exist_ok=True)
             with Image.open(source) as image:
                 image.draft("RGB", (2400, 2400))
@@ -329,6 +342,8 @@ def share_image(filename):
     except OSError:
         app.logger.exception("Could not create the share preview image")
         return None
+    if not target.is_file():
+        return f"images/{filename}"
     return f"generated/{target.name}"
 
 
@@ -337,7 +352,7 @@ def touch_icon(filename):
     source = IMAGE_FOLDER / filename
     target = GENERATED_FOLDER / "touch-icon.png"
     try:
-        if not target.is_file() or target.stat().st_mtime < source.stat().st_mtime:
+        if needs_build(target, source):
             GENERATED_FOLDER.mkdir(exist_ok=True)
             with Image.open(source) as image:
                 image.draft("RGB", (720, 720))
@@ -346,6 +361,8 @@ def touch_icon(filename):
     except OSError:
         app.logger.exception("Could not create the touch icon")
         return None
+    if not target.is_file():
+        return f"images/{filename}"
     return f"generated/{target.name}"
 
 
@@ -674,7 +691,8 @@ def delete_wish_command(wish_id):
     click.echo(f"Deleted wish {wish_id}." if deleted else f"No wish with ID {wish_id}.")
 
 
-threading.Thread(target=prepare_images, daemon=True).start()
+if not ON_VERCEL:
+    threading.Thread(target=prepare_images, daemon=True).start()
 
 if __name__ == "__main__":
     # Set FLASK_DEBUG=1 while editing locally for auto-reload. Never enable it on a public host.
