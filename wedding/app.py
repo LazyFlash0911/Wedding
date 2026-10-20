@@ -237,21 +237,21 @@ MEMORY_CAPTIONS = [
 ]
 
 # Google Drive album links. Leave "url" empty until an album is ready to share.
-PHOTO_ALBUMS = [
-    {
-        "id": "pre-wedding",
-        "title": "Pre-wedding",
-        "title_hi": "प्री-वेडिंग",
-        "url": "https://drive.google.com/drive/folders/1nMtn7yWR-Tb8Q5sLMuur7yge8txNjLIs?usp=drive_link",
-    },
-    {
-        "id": "engagement",
-        "title": "Engagement",
-        "title_hi": "सगाई",
-        "url": "https://drive.google.com/drive/folders/1jylBAKrPNjuR-6OotSnrbMc2mDB5xFb0?usp=drive_link",
-    },
-    {"id": "wedding", "title": "Wedding", "title_hi": "विवाह", "url": ""},
-]
+# PHOTO_ALBUMS = [
+#     {
+#         "id": "pre-wedding",
+#         "title": "Pre-wedding",
+#         "title_hi": "प्री-वेडिंग",
+#         "url": "https://drive.google.com/drive/folders/1nMtn7yWR-Tb8Q5sLMuur7yge8txNjLIs?usp=drive_link",
+#     },
+#     {
+#         "id": "engagement",
+#         "title": "Engagement",
+#         "title_hi": "सगाई",
+#         "url": "https://drive.google.com/drive/folders/1jylBAKrPNjuR-6OotSnrbMc2mDB5xFb0?usp=drive_link",
+#     },
+#     {"id": "wedding", "title": "Wedding", "title_hi": "विवाह", "url": ""},
+# ]
 
 # Optional hotels for out-of-town guests. Each section is hidden while its list is empty.
 # Example: {"name": "Hotel Name", "note": "5 min from Coco Island", "note_hi": "...", "url": "https://..."}
@@ -323,6 +323,8 @@ def web_image(filename, size):
     except OSError:
         app.logger.exception("Could not resize %s", filename)
         return f"images/{filename}"
+    if not target.is_file():  # e.g. read-only host with no pre-generated copy
+        return f"images/{filename}"
     return f"generated/{target.name}"
 
 
@@ -340,6 +342,8 @@ def share_image(filename):
     except OSError:
         app.logger.exception("Could not create the share preview image")
         return None
+    if not target.is_file():
+        return f"images/{filename}"
     return f"generated/{target.name}"
 
 
@@ -357,6 +361,8 @@ def touch_icon(filename):
     except OSError:
         app.logger.exception("Could not create the touch icon")
         return None
+    if not target.is_file():
+        return f"images/{filename}"
     return f"generated/{target.name}"
 
 
@@ -503,7 +509,8 @@ def index():
         venues=get_venues(),
         family_groups=get_family_groups(),
         memories=memories,
-        albums=PHOTO_ALBUMS,
+        albums=[],  # PHOTO_ALBUMS disabled
+        # albums=PHOTO_ALBUMS,
         stays=STAYS,
         contacts=CONTACTS,
         wishes=wishes,
@@ -653,16 +660,16 @@ def qr_codes():
             "svg": qr_svg(invitation_url),
         }
     ]
-    codes += [
-        {
-            "title": f"{album['title']} photos",
-            "subtitle": "Scan to view the album",
-            "url": album["url"],
-            "svg": qr_svg(album["url"]),
-        }
-        for album in PHOTO_ALBUMS
-        if album["url"]
-    ]
+#     codes += [
+#         {
+#             "title": f"{album['title']} photos",
+#             "subtitle": "Scan to view the album",
+#             "url": album["url"],
+#             "svg": qr_svg(album["url"]),
+#         }
+#         for album in PHOTO_ALBUMS
+#         if album["url"]
+#     ]
     return render_template("qr.html", codes=codes)
 
 

@@ -237,21 +237,21 @@ MEMORY_CAPTIONS = [
 ]
 
 # Google Drive album links. Leave "url" empty until an album is ready to share.
-PHOTO_ALBUMS = [
-    {
-        "id": "pre-wedding",
-        "title": "Pre-wedding",
-        "title_hi": "प्री-वेडिंग",
-        "url": "https://drive.google.com/drive/folders/1nMtn7yWR-Tb8Q5sLMuur7yge8txNjLIs?usp=drive_link",
+#PHOTO_ALBUMS = [
+#    {
+#        "id": "pre-wedding",
+#        "title": "Pre-wedding",
+#        "title_hi": "प्री-वेडिंग",
+#        "url": "",
     },
-    {
-        "id": "engagement",
-        "title": "Engagement",
-        "title_hi": "सगाई",
-        "url": "https://drive.google.com/drive/folders/1jylBAKrPNjuR-6OotSnrbMc2mDB5xFb0?usp=drive_link",
-    },
-    {"id": "wedding", "title": "Wedding", "title_hi": "विवाह", "url": ""},
-]
+#    {
+#        "id": "engagement",
+#        "title": "Engagement",
+#        "title_hi": "सगाई",
+#        "url": "",
+#    },
+#   {"id": "wedding", "title": "Wedding", "title_hi": "विवाह", "url": ""},
+#]
 
 # Optional hotels for out-of-town guests. Each section is hidden while its list is empty.
 # Example: {"name": "Hotel Name", "note": "5 min from Coco Island", "note_hi": "...", "url": "https://..."}

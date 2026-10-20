@@ -1,0 +1,478 @@
+{%- macro divider() -%}
+<svg class="divider" viewBox="0 0 240 40" aria-hidden="true" focusable="false">
+  <path d="M8 20H90M150 20H232" stroke="currentColor" stroke-width="1" stroke-linecap="round"/>
+  <circle cx="96" cy="20" r="1.8" fill="currentColor"/>
+  <circle cx="144" cy="20" r="1.8" fill="currentColor"/>
+  <g transform="translate(120 20)" fill="none" stroke="currentColor" stroke-width="1">
+    {% for angle in range(0, 360, 30) %}<ellipse rx="2.6" ry="5.6" transform="rotate({{ angle }}) translate(0 -11)"/>{% endfor %}
+    <circle r="6"/>
+    <circle r="2.6" fill="currentColor" stroke="none"/>
+  </g>
+</svg>
+{%- endmacro -%}
+<!doctype html>
+<html lang="en" data-title-hi="प्रियंका और अंकुश — विवाह निमंत्रण">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#f6e6e8">
+  <!-- Stops phone browsers (and WhatsApp's in-app browser) from auto-darkening the design. -->
+  <meta name="color-scheme" content="only light">
+  <!-- Keep family photos and addresses out of Google search; WhatsApp previews still work. -->
+  <meta name="robots" content="noindex, nofollow">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='30' fill='%23a45f70'/%3E%3Ctext x='32' y='42' font-family='Georgia,serif' font-size='26' fill='%23fff0df' text-anchor='middle'%3EP%E2%99%A5A%3C/text%3E%3C/svg%3E">
+  {% if touch_icon_url %}<link rel="apple-touch-icon" href="{{ touch_icon_url }}">{% endif %}
+  <title>Priyanka & Ankoosh — A Wedding Invitation</title>
+  <meta name="description" content="You're invited to the wedding of Priyanka Yadav and Ankoosh Yadav · 9 December 2026 · Mumbai.">
+
+  <meta property="og:type" content="website">
+  <meta property="og:url" content="{{ page_url }}">
+  <meta property="og:title" content="Priyanka & Ankoosh are getting married ♥">
+  <meta property="og:description" content="Join us for the Sangeet, Haldi and Wedding · 7–9 December 2026 · Mumbai.">
+  {% if preview_image_url %}
+  <meta property="og:image" content="{{ preview_image_url }}">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="Priyanka and Ankoosh">
+  <meta name="twitter:card" content="summary_large_image">
+  {% endif %}
+
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Caveat:wght@500;600&family=DM+Sans:wght@400;500;600;700&family=Noto+Sans+Devanagari:wght@400;500;600&family=Noto+Serif+Devanagari:wght@400;500;600&family=Playfair+Display:ital,wght@0,400;0,500;0,600;1,400;1,500&display=swap">
+  <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+  <script>
+    document.documentElement.classList.add("js");
+    try {
+      if (sessionStorage.getItem("invite-opened")) document.documentElement.classList.add("intro-skipped");
+      var savedLang = localStorage.getItem("lang");
+      if (savedLang === "hi" || (!savedLang && /^hi\b/i.test(navigator.language || ""))) document.documentElement.lang = "hi";
+    } catch (error) {}
+    // Safety net: if script.js fails to run (very old phone, blocked download), show the plain page
+    // instead of leaving the guest stuck on the envelope.
+    window.addEventListener("load", function () {
+      if (!window.inviteReady) document.documentElement.classList.remove("js");
+    });
+  </script>
+</head>
+<body>
+  <div class="petal-layer" id="petal-layer" aria-hidden="true"></div>
+
+  <!-- Envelope intro: a full-screen first step before the invitation -->
+  <div class="intro" id="intro" role="dialog" aria-modal="true" aria-labelledby="intro-title">
+    <button class="lang-toggle intro-lang" type="button" aria-label="Switch language" data-hi-aria-label="भाषा बदलें">हिंदी में पढ़ें</button>
+    <div class="intro-glow" aria-hidden="true"></div>
+    <div class="intro-copy">
+      <p class="eyebrow" data-hi="प्यार से भरा एक छोटा सा लिफ़ाफ़ा">A LITTLE ENVELOPE FULL OF LOVE</p>
+      <h1 id="intro-title" data-hi-html="आप आमंत्रित हैं<br><em>हमारे हमेशा के सफ़र में।</em>">You're invited<br><em>to our forever.</em></h1>
+      <p class="intro-text" data-hi="दो दिलों, दो परिवारों और एक खूबसूरत नई शुरुआत का उत्सव।">A celebration of two hearts, two families, and a beautiful new beginning.</p>
+      <button class="open-invite" id="open-invite" type="button" aria-expanded="false">
+        <span class="envelope-icon" aria-hidden="true">✉</span>
+        <span id="open-label" data-hi="अपना निमंत्रण खोलें">Open your invitation</span>
+        <span class="button-arrow" aria-hidden="true">↗</span>
+      </button>
+      <p class="tiny-note" data-hi="प्रियंका और अंकुश की ओर से, ढेर सारे प्यार के साथ">Made with love by Priyanka & Ankoosh</p>
+    </div>
+    <div class="envelope-stage" aria-hidden="true">
+      <div class="envelope">
+        <div class="envelope-back"></div>
+        <div class="envelope-letter">
+          <span class="letter-top" data-hi="अपने परिवारों के साथ">TOGETHER WITH OUR FAMILIES</span>
+          <span class="letter-names foil" data-hi-html="प्रियंका <i>&amp;</i><br>अंकुश">Priyanka <i>&</i><br>Ankoosh</span>
+          <span class="letter-date">09 · 12 · 2026</span>
+          <span class="letter-flower">✿</span>
+        </div>
+        <div class="envelope-flap"></div>
+        <div class="envelope-front"></div>
+        <div class="wax-seal">P<span>♥</span>A</div>
+      </div>
+      <div class="sprig sprig-left">❧</div>
+      <div class="sprig sprig-right">❧</div>
+    </div>
+  </div>
+
+  <div class="page">
+    <header class="nav">
+      <a class="brand" href="#top" aria-label="Priyanka and Ankoosh, back to top">P <span>✿</span> A</a>
+      <nav class="nav-links" id="nav-links" aria-label="Sections">
+        <a href="#our-story" data-hi="हमारी कहानी">Our story</a>
+        <a href="#celebrations" data-hi="उत्सव">Celebrations</a>
+        <a href="#getting-there" data-hi="स्थान">Getting there</a>
+        <a href="#family" data-hi="परिवार">Family</a>
+        <a href="#memories" data-hi="यादें">Memories</a>
+        <!-- <a href="#photos" data-hi="तस्वीरें">Photos</a> -->
+        <a href="#wishes" data-hi="शुभकामनाएँ">Wishes</a>
+      </nav>
+      <div class="nav-actions">
+        <button class="lang-toggle" type="button" aria-label="Switch language" data-hi-aria-label="भाषा बदलें">हिंदी</button>
+        {% if music_url %}
+        <button class="music-toggle" id="music-toggle" type="button" aria-pressed="false" data-src="{{ music_url }}">
+          <span class="music-icon" aria-hidden="true">♫</span>
+          <span id="music-label">Music off</span>
+        </button>
+        {% endif %}
+        <button class="nav-toggle" id="nav-toggle" type="button" aria-expanded="false" aria-controls="nav-links" aria-label="Menu" data-hi-aria-label="मेनू">
+          <span></span><span></span><span></span>
+        </button>
+      </div>
+    </header>
+
+    <main id="top" tabindex="-1">
+      <!-- Shown on an event day: what is happening today, with a one-tap route. -->
+      <a class="today-banner" id="today-banner" href="#celebrations" hidden>
+        <span class="today-badge" id="today-badge"></span>
+        <span class="today-text"><b id="today-name"></b><small id="today-detail"></small></span>
+        <span class="today-arrow" aria-hidden="true">→</span>
+      </a>
+
+      <section class="ganesh-blessing" aria-label="Ganesh Vandana">
+        <div class="ganesh-content">
+          <h2 class="ganesh-invocation">॥ श्री गणेशाय नमः ॥</h2>
+          <p class="ganesh-shlok">
+            वक्रतुण्ड महाकाय सूर्यकोटि समप्रभः।<br>
+            निर्विघ्नं कुरु मे देव सर्वकार्येषु सर्वदा॥
+          </p>
+          <p class="ganesh-meaning" data-hi="भगवान गणेश सभी विघ्न दूर करें और इस सुंदर सफ़र की शुरुआत को आशीर्वाद दें।">May Lord Ganesha remove all obstacles and bless the beginning of this beautiful journey.</p>
+        </div>
+      </section>
+
+      <section class="welcome section" id="our-story">
+        <div class="reveal">
+          <div class="section-kicker"><span>✿</span> <b data-hi="हमेशा की शुरुआत">THE BEGINNING OF FOREVER</b> <span>✿</span></div>
+          <p class="handwritten" data-hi="प्यार सहित,">With love,</p>
+          <h2 class="couple-names">
+            <span class="foil" data-hi="{{ wedding.partner_one_hi }}">{{ wedding.partner_one }}</span>
+            <span class="amp">&</span><br>
+            <span class="foil" data-hi="{{ wedding.partner_two_hi }}">{{ wedding.partner_two }}</span>
+          </h2>
+          <p class="body-copy" data-hi="अपने परिवारों के आशीर्वाद के साथ, हमें आपको उन हँसी, परंपराओं और छोटे-छोटे पलों का हिस्सा बनने के लिए आमंत्रित करते हुए बेहद खुशी हो रही है, जो हमारी शादी को अविस्मरणीय बनाएँगे।">With the blessings of our families, we're so happy to invite you to share the laughter, traditions, and little moments that will make our wedding unforgettable.</p>
+          {{ divider() }}
+          <div class="date-stamp">
+            <span class="stamp-day">09</span>
+            <span><b data-hi="दिसंबर">DECEMBER</b><small data-hi="2026 · बुधवार">2026 · WEDNESDAY</small></span>
+          </div>
+        </div>
+        <div class="countdown-wrap reveal">
+          <div id="countdown-live">
+            <p class="eyebrow" data-hi="हमारी शादी की उलटी गिनती">COUNTING DOWN TO OUR WEDDING</p>
+            <div class="countdown" id="countdown" data-date="{{ wedding.date_iso }}">
+              <div><strong id="days">—</strong><span data-hi="दिन">Days</span></div>
+              <div><strong id="hours">—</strong><span data-hi="घंटे">Hours</span></div>
+              <div><strong id="minutes">—</strong><span data-hi="मिनट">Minutes</span></div>
+              <div><strong id="seconds">—</strong><span data-hi="सेकंड">Seconds</span></div>
+            </div>
+          </div>
+          <p class="countdown-done" id="countdown-done" hidden data-hi="शुभ विवाह संपन्न ♥">Just married ♥</p>
+        </div>
+      </section>
+
+      <section class="events section" id="celebrations">
+        <div class="reveal">
+          <div class="section-kicker"><span>✿</span> <b data-hi="संजोने लायक पल">MOMENTS TO TREASURE</b> <span>✿</span></div>
+          <h2 data-hi="उत्सव शुरू होते हैं।">Let the celebrations begin.</h2>
+          <p class="body-copy" data-hi="तीन दिन, चार उत्सव। हर एक का अपना जादू है।">Three days, four celebrations. Each one has its own little magic.</p>
+        </div>
+
+        <div class="timeline">
+          {% for day in event_days %}
+            <div class="timeline-day">
+              <h3 class="timeline-date reveal" data-hi="{{ day.date_hi }}">{{ day.date }}</h3>
+              {% for event in day.events %}
+                {% set venue = venues | selectattr('id', 'equalto', event.venue) | first %}
+                <article class="event-card accent-{{ event.accent }} reveal" id="event-{{ event.id }}"
+                         data-start="{{ event.start.isoformat() }}" data-end="{{ event.end.isoformat() }}">
+                  <span class="event-status" hidden></span>
+                  <span class="event-icon" aria-hidden="true">{{ event.icon }}</span>
+                  <p class="event-time" data-hi="{{ event.time_hi }}">{{ event.time }}</p>
+                  <h4 data-hi="{{ event.name_hi }}">{{ event.name }}</h4>
+                  <p class="event-subtitle" data-hi="{{ event.subtitle_hi }}">{{ event.subtitle }}</p>
+                  <p class="event-description" data-hi="{{ event.description_hi }}">{{ event.description }}</p>
+                  <dl class="event-details">
+                    <div>
+                      <dt data-hi="स्थान">VENUE</dt>
+                      <dd><b data-hi="{{ venue.name_hi }}">{{ venue.name }}</b><small>{{ venue.address }}</small></dd>
+                    </div>
+                    <div>
+                      <dt data-hi="ड्रेस कोड">DRESS CODE</dt>
+                      <dd data-hi="{{ event.dress_code_hi }}">{{ event.dress_code }}</dd>
+                    </div>
+                  </dl>
+                  <div class="event-actions">
+                    <a class="pill-link directions-link" target="_blank" rel="noopener"
+                       href="https://www.google.com/maps/search/?api=1&query={{ venue.address | urlencode }}">
+                      <span aria-hidden="true">📍</span> <span data-hi="रास्ता देखें">Directions</span>
+                    </a>
+                    <a class="pill-link calendar-link" target="_blank" rel="noopener" href="{{ event.google_calendar_url }}"
+                       data-ics="{{ url_for('event_calendar', event_id=event.id) }}">
+                      <span aria-hidden="true">🗓️</span> <span data-hi="कैलेंडर में जोड़ें">Add to calendar</span>
+                    </a>
+                  </div>
+                </article>
+              {% endfor %}
+            </div>
+          {% endfor %}
+        </div>
+        <p class="event-footnote reveal" data-hi="हम इन खास पलों को आपके साथ मनाने के लिए बेताब हैं।">We can't wait to celebrate these special moments with you.</p>
+      </section>
+
+      <section class="venue-section section" id="getting-there">
+        <div class="reveal">
+          <div class="section-kicker"><span>✿</span> <b data-hi="शादी का दिन">THE WEDDING DAY</b> <span>✿</span></div>
+          <h2 data-hi-html="हमसे मिलिए <em>{{ wedding_venue.name_hi }}</em> में">Meet us at <em>{{ wedding_venue.name }}</em></h2>
+        </div>
+
+        <div class="venue-layout reveal">
+          <div class="venue-card">
+            <div class="venue-flower" aria-hidden="true">❧</div>
+            <p class="venue-date" data-hi="{{ wedding.date_text_hi }} · {{ wedding.ceremony_time_hi }}">{{ wedding.date_text }} · {{ wedding.ceremony_time }}</p>
+            <h3 data-hi="{{ wedding_venue.name_hi }}">{{ wedding_venue.name }}</h3>
+            <p class="venue-address">{{ wedding_venue.address }}</p>
+            <p class="venue-tip" data-hi="{{ wedding_venue.tip_hi }}">{{ wedding_venue.tip }}</p>
+            <div class="venue-buttons">
+              <a class="open-invite" target="_blank" rel="noopener"
+                 href="https://www.google.com/maps/search/?api=1&query={{ wedding_venue.address | urlencode }}">
+                <span data-hi="रास्ता खोजें">Find your way</span> <span aria-hidden="true">↗</span>
+              </a>
+              <a class="ghost-button calendar-link" target="_blank" rel="noopener" href="{{ wedding_calendar_url }}"
+                 data-ics="{{ url_for('event_calendar', event_id='wedding') }}">
+                <span data-hi="कैलेंडर में जोड़ें">Add to calendar</span>
+              </a>
+            </div>
+          </div>
+          <div class="venue-map">
+            <iframe title="Map of {{ wedding_venue.name }}" loading="lazy" referrerpolicy="no-referrer-when-downgrade"
+                    src="https://maps.google.com/maps?q={{ wedding_venue.address | urlencode }}&output=embed"></iframe>
+          </div>
+        </div>
+
+        <h3 class="subsection-title reveal" data-hi="सभी स्थान">All venues</h3>
+        <div class="venue-grid">
+          {% for venue in venues %}
+            <article class="venue-mini reveal">
+              <h4 data-hi="{{ venue.name_hi }}">{{ venue.name }}</h4>
+              <ul class="venue-events">
+                {% for event in venue.events %}<li data-hi="{{ event.name_hi }}">{{ event.name }}</li>{% endfor %}
+              </ul>
+              <p class="venue-mini-address">{{ venue.address }}</p>
+              <p class="venue-mini-tip" data-hi="{{ venue.tip_hi }}">{{ venue.tip }}</p>
+              <a class="text-link" target="_blank" rel="noopener"
+                 href="https://www.google.com/maps/search/?api=1&query={{ venue.address | urlencode }}">
+                <span data-hi="रास्ता देखें">Directions</span> <span aria-hidden="true">↗</span>
+              </a>
+            </article>
+          {% endfor %}
+        </div>
+
+        {% if stays %}
+          <h3 class="subsection-title reveal" data-hi="ठहरने की जगहें">Where to stay</h3>
+          <div class="venue-grid">
+            {% for stay in stays %}
+              <article class="venue-mini reveal">
+                <h4>{{ stay.name }}</h4>
+                {% if stay.note %}<p class="venue-mini-tip" data-hi="{{ stay.note_hi or stay.note }}">{{ stay.note }}</p>{% endif %}
+                {% if stay.url %}<a class="text-link" href="{{ stay.url }}" target="_blank" rel="noopener"><span data-hi="देखें">View</span> <span aria-hidden="true">↗</span></a>{% endif %}
+              </article>
+            {% endfor %}
+          </div>
+        {% endif %}
+
+        {% if contacts %}
+          <h3 class="subsection-title reveal" data-hi="किसी मदद के लिए संपर्क करें">Need help? Call us</h3>
+          <div class="contact-list reveal">
+            {% for contact in contacts %}
+              <a class="contact-chip" href="tel:{{ contact.phone | replace(' ', '') }}">
+                <b data-hi="{{ contact.name_hi or contact.name }}">{{ contact.name }}</b>
+                <span>{{ contact.phone }}</span>
+              </a>
+            {% endfor %}
+          </div>
+        {% endif %}
+      </section>
+
+      {% if family_groups %}
+      <section class="family-section section" id="family">
+        <div class="reveal">
+          <div class="section-kicker"><span>✿</span> <b data-hi="जिनसे हम हैं">THE PEOPLE WHO MAKE US US</b> <span>✿</span></div>
+          <h2 data-hi="हमारा परिवार।">Meet the family.</h2>
+          <p class="body-copy" data-hi="वो परिवार और अपने, जिन्होंने हमारी ज़िंदगी को प्यार, हँसी और यादों से भर दिया।">The family and loved ones who have filled our lives with love, laughter, and memories.</p>
+        </div>
+
+        <div class="family-grid">
+          {% for family in family_groups %}
+            <article class="family-card reveal">
+              <div class="portrait-row">
+                {% for photo in family.photos %}
+                  <button class="portrait" type="button" data-lightbox="family"
+                          data-src="{{ url_for('static', filename=photo.large) }}"
+                          data-caption="{{ family.title }}{% if family.names %} · {{ family.names }}{% endif %}"
+                          data-caption-hi="{{ family.title_hi }}{% if family.names %} · {{ family.names_hi or family.names }}{% endif %}"
+                          aria-label="View photo: {{ family.title }}">
+                    <img src="{{ url_for('static', filename=photo.thumb) }}" alt="{{ family.title }}" loading="lazy">
+                  </button>
+                {% endfor %}
+              </div>
+              {% if family.names %}<p class="family-names" data-hi="{{ family.names_hi or family.names }}">{{ family.names }}</p>{% endif %}
+              <h3 class="family-relation" data-hi="{{ family.title_hi }}">{{ family.title }}</h3>
+            </article>
+          {% endfor %}
+        </div>
+      </section>
+      {% endif %}
+
+      {% if memories %}
+      <section class="gallery-section section" id="memories">
+        <div class="reveal">
+          <div class="section-kicker"><span>✿</span> <b data-hi="छोटे पल, ढेर सारा प्यार">LITTLE MOMENTS, BIG LOVE</b> <span>✿</span></div>
+          <h2 data-hi="हमारी कहानी के कुछ पन्ने।">A few pages from our story.</h2>
+        </div>
+
+        <div class="gallery reveal">
+          <button class="gallery-arrow" id="gallery-prev" type="button" aria-label="Previous memory" data-hi-aria-label="पिछली याद">←</button>
+          <article class="memory-card" aria-live="polite">
+            <button class="photo-frame" id="memory-open" type="button" aria-label="View photo full screen" data-hi-aria-label="तस्वीर बड़ी करके देखें">
+              <img id="gallery-image" src="{{ memories[0].src }}" alt="{{ memories[0].title or 'Priyanka and Ankoosh' }}">
+            </button>
+            <div class="memory-caption">
+              <span class="memory-index" id="memory-index">01 / {{ '%02d' % (memories | length) }}</span>
+              <h3 id="memory-title">{{ memories[0].title }}</h3>
+              <p id="memory-text">{{ memories[0].caption }}</p>
+            </div>
+          </article>
+          <button class="gallery-arrow" id="gallery-next" type="button" aria-label="Next memory" data-hi-aria-label="अगली याद">→</button>
+        </div>
+        {% if memories | length > 1 %}
+        <div class="gallery-dots" id="gallery-dots">
+          {% for item in memories %}
+            <button type="button" class="{% if loop.first %}active{% endif %}" data-index="{{ loop.index0 }}" aria-label="Show memory {{ loop.index }}"></button>
+          {% endfor %}
+        </div>
+        {% endif %}
+      </section>
+      {% endif %}
+
+      <section class="albums-section section" id="photos">
+        <div class="reveal">
+          <div class="section-kicker"><span>✿</span> <b data-hi="हमेशा संजोने वाली यादें">MEMORIES TO KEEP FOREVER</b> <span>✿</span></div>
+          <h2 data-hi="हमारे फ़ोटो एल्बम।">Our photo albums.</h2>
+          <p class="body-copy" data-hi="हमारी सबसे प्यारी तस्वीरें गूगल ड्राइव पर देखें।">Browse our favourite photos on Google Drive.</p>
+        </div>
+        <div class="album-grid">
+          {% for album in albums %}
+            {% if album.url %}
+              <a class="album-card album-{{ album.id }} reveal" href="{{ album.url }}" target="_blank" rel="noopener">
+                <span class="album-icon" aria-hidden="true">❀</span>
+                <h3 data-hi="{{ album.title_hi }}">{{ album.title }}</h3>
+                <span class="album-link"><span data-hi="गूगल ड्राइव पर देखें">View on Google Drive</span> <span aria-hidden="true">↗</span></span>
+              </a>
+            {% else %}
+              <div class="album-card album-{{ album.id }} is-soon reveal">
+                <span class="album-icon" aria-hidden="true">❀</span>
+                <h3 data-hi="{{ album.title_hi }}">{{ album.title }}</h3>
+                <span class="album-link" data-hi="शादी के बाद साझा किया जाएगा">Shared after the wedding</span>
+              </div>
+            {% endif %}
+          {% endfor %}
+        </div>
+      </section>
+
+      <section class="wishes-section section" id="wishes">
+        <div class="reveal">
+          <div class="section-kicker"><span>✿</span> <b data-hi="आपका आशीर्वाद">YOUR BLESSINGS</b> <span>✿</span></div>
+          <h2 data-hi="हमें अपना आशीर्वाद दें।">Leave us a blessing.</h2>
+          <p class="body-copy" data-hi="आपके शब्द हमारे लिए हमेशा की याद बन जाएँगे।">Your words will become a keepsake we treasure forever.</p>
+        </div>
+
+        {% if flashes %}
+          <div class="flash-messages" role="status">
+            {% for message in flashes %}
+              <p class="flash {{ message.category }}" data-hi="{{ message.hi }}">{{ message.en }}</p>
+            {% endfor %}
+          </div>
+        {% endif %}
+
+        <form class="wish-form reveal" action="{{ url_for('add_wish') }}" method="post">
+          <label for="wish-name" data-hi="आपका नाम">Your name</label>
+          <input id="wish-name" name="name" type="text" maxlength="60" required autocomplete="name">
+          <label for="wish-message" data-hi="आपका संदेश">Your message</label>
+          <textarea id="wish-message" name="message" rows="4" maxlength="500" required
+                    placeholder="Wishing you a lifetime of love…" data-hi-placeholder="आप दोनों को ज़िंदगी भर का प्यार मिले…"></textarea>
+          <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+          <div class="wish-honeypot" aria-hidden="true">
+            <label for="wish-website">Leave this empty</label>
+            <input id="wish-website" name="website" type="text" tabindex="-1" autocomplete="off">
+          </div>
+          <button class="open-invite" type="submit"><span data-hi="आशीर्वाद भेजें">Send your blessing</span> <span aria-hidden="true">♥</span></button>
+        </form>
+
+        {% if wishes %}
+          <div class="wish-wall">
+            {% for wish in wishes %}
+              <figure class="wish-card reveal">
+                <blockquote>{{ wish.message }}</blockquote>
+                <figcaption>— {{ wish.name }}</figcaption>
+              </figure>
+            {% endfor %}
+          </div>
+        {% else %}
+          <p class="wish-empty reveal" data-hi="सबसे पहले आशीर्वाद देने वाले बनें।">Be the first to leave a blessing.</p>
+        {% endif %}
+      </section>
+    </main>
+
+    <footer>
+      {{ divider() }}
+      <p data-hi="प्यार सहित, प्रियंका और अंकुश">With love, Priyanka & Ankoosh</p>
+      <small data-hi="09 दिसंबर 2026 · एक यादगार दिन, हमेशा रहने वाला प्यार।">09 December 2026 · A day to remember, a love to last forever.</small>
+      <button class="footer-share share-button" type="button">
+        <span aria-hidden="true">↗</span> <span data-hi="यह निमंत्रण साझा करें">Share this invitation</span>
+      </button>
+    </footer>
+
+    <!-- Thumb-friendly navigation for phones -->
+    <nav class="bottom-nav" aria-label="Quick links">
+      <a href="#celebrations" data-section="celebrations">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3.5" y="5" width="17" height="15" rx="2.5"/><path d="M3.5 10h17M8 3v4M16 3v4"/></svg>
+        <span data-hi="कार्यक्रम">Events</span>
+      </a>
+      <a href="#getting-there" data-section="getting-there">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 21s-7-6.2-7-11.5a7 7 0 0 1 14 0C19 14.8 12 21 12 21z"/><circle cx="12" cy="9.5" r="2.5"/></svg>
+        <span data-hi="स्थान">Venue</span>
+      </a>
+      <a href="#memories" data-section="memories">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4.5" width="18" height="15" rx="2.5"/><circle cx="9" cy="10" r="1.8"/><path d="M21 16l-5-5-8 8.5"/></svg>
+        <span data-hi="तस्वीरें">Photos</span>
+      </a>
+      <a href="#wishes" data-section="wishes">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 20s-7.5-4.6-7.5-10A4.3 4.3 0 0 1 12 7.4 4.3 4.3 0 0 1 19.5 10c0 5.4-7.5 10-7.5 10z"/></svg>
+        <span data-hi="शुभकामना">Wishes</span>
+      </a>
+      <button class="share-button" type="button">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="18" cy="5.5" r="2.5"/><circle cx="6" cy="12" r="2.5"/><circle cx="18" cy="18.5" r="2.5"/><path d="M8.2 10.8l7.6-4M8.2 13.2l7.6 4"/></svg>
+        <span data-hi="साझा करें">Share</span>
+      </button>
+    </nav>
+  </div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+
+  <div class="lightbox" id="lightbox" role="dialog" aria-modal="true" aria-label="Photo viewer" hidden>
+    <button class="lightbox-close" id="lightbox-close" type="button" aria-label="Close" data-hi-aria-label="बंद करें">×</button>
+    <button class="lightbox-arrow lightbox-prev" id="lightbox-prev" type="button" aria-label="Previous photo" data-hi-aria-label="पिछली तस्वीर">←</button>
+    <figure class="lightbox-figure">
+      <img id="lightbox-image" alt="">
+      <figcaption id="lightbox-caption"></figcaption>
+      <span class="lightbox-count" id="lightbox-count"></span>
+    </figure>
+    <button class="lightbox-arrow lightbox-next" id="lightbox-next" type="button" aria-label="Next photo" data-hi-aria-label="अगली तस्वीर">→</button>
+  </div>
+
+  <script type="application/json" id="memories-data">{{ memories | tojson }}</script>
+  <script type="application/json" id="share-data">{{ {
+    "url": page_url,
+    "title": "Priyanka & Ankoosh — Wedding Invitation",
+    "en": "Priyanka & Ankoosh are getting married! 💍 Sangeet, Haldi & Wedding · 7–9 December 2026, Mumbai. Open the invitation:",
+    "hi": "प्रियंका और अंकुश की शादी है! 💍 संगीत, हल्दी और विवाह · 7–9 दिसंबर 2026, मुंबई। निमंत्रण देखें:"
+  } | tojson }}</script>
+  <script src="{{ url_for('static', filename='script.js') }}"></script>
+</body>
+</html>
