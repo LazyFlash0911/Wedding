@@ -33,20 +33,30 @@ PROJECT_FOLDER = Path(__file__).resolve().parent
 STATIC_FOLDER = PROJECT_FOLDER / "static"
 IMAGE_FOLDER = STATIC_FOLDER / "images"
 GENERATED_FOLDER = STATIC_FOLDER / "generated"
-INSTANCE_FOLDER = PROJECT_FOLDER / "instance"
+# Vercel's deployment folder is read-only; only /tmp is writable (and it is temporary).
+ON_VERCEL = bool(os.environ.get("VERCEL"))
+INSTANCE_FOLDER = Path("/tmp/instance") if ON_VERCEL else PROJECT_FOLDER / "instance"
 WISHES_DB = INSTANCE_FOLDER / "wishes.db"
 
 
 def load_secret_key():
-    """Use FLASK_SECRET_KEY, or a key saved once in instance/ so it survives restarts."""
-    key = os.environ.get("FLASK_SECRET_KEY")
+    # Production (Vercel): use the env var
+    key = os.environ.get("SECRET_KEY")
     if key:
         return key
-    INSTANCE_FOLDER.mkdir(exist_ok=True)
-    key_file = INSTANCE_FOLDER / "secret_key"
-    if not key_file.is_file():
-        key_file.write_text(secrets.token_hex(32), encoding="utf-8")
-    return key_file.read_text(encoding="utf-8").strip()
+
+    # Local dev: persist a key in instance/
+    try:
+        INSTANCE_FOLDER.mkdir(exist_ok=True)
+        key_file = INSTANCE_FOLDER / "secret_key"
+        if key_file.exists():
+            return key_file.read_text().strip()
+        key = secrets.token_hex(32)
+        key_file.write_text(key)
+        return key
+    except OSError:
+        # Read-only filesystem and no env var: fail with a clear message
+        raise RuntimeError("Set the SECRET_KEY environment variable.")
 
 
 # Optional: the public address of the site (e.g. https://priyanka-ankoosh.in), used for
@@ -261,6 +271,15 @@ MAX_WISH_NAME = 60
 MAX_WISH_MESSAGE = 500
 
 
+def needs_build(target, source):
+    """True if a generated image must be (re)created. On Vercel, ship pre-generated files and never rebuild."""
+    if not target.is_file():
+        return not ON_VERCEL
+    if ON_VERCEL:
+        return False
+    return target.stat().st_mtime < source.stat().st_mtime
+
+
 def natural_key(filename):
     return [int(part) if part.isdigit() else part.casefold() for part in re.split(r"(\d+)", filename)]
 
@@ -293,7 +312,7 @@ def web_image(filename, size):
     source = IMAGE_FOLDER / filename
     target = GENERATED_FOLDER / f"{Path(filename).stem}-{size}.jpg"
     try:
-        if not target.is_file() or target.stat().st_mtime < source.stat().st_mtime:
+        if needs_build(target, source):
             GENERATED_FOLDER.mkdir(exist_ok=True)
             max_side = IMAGE_SIZES[size]
             with Image.open(source) as image:
@@ -312,7 +331,7 @@ def share_image(filename):
     source = IMAGE_FOLDER / filename
     target = GENERATED_FOLDER / "share-preview.jpg"
     try:
-        if not target.is_file() or target.stat().st_mtime < source.stat().st_mtime:
+        if needs_build(target, source):
             GENERATED_FOLDER.mkdir(exist_ok=True)
             with Image.open(source) as image:
                 image.draft("RGB", (2400, 2400))
@@ -329,7 +348,7 @@ def touch_icon(filename):
     source = IMAGE_FOLDER / filename
     target = GENERATED_FOLDER / "touch-icon.png"
     try:
-        if not target.is_file() or target.stat().st_mtime < source.stat().st_mtime:
+        if needs_build(target, source):
             GENERATED_FOLDER.mkdir(exist_ok=True)
             with Image.open(source) as image:
                 image.draft("RGB", (720, 720))
@@ -666,7 +685,8 @@ def delete_wish_command(wish_id):
     click.echo(f"Deleted wish {wish_id}." if deleted else f"No wish with ID {wish_id}.")
 
 
-threading.Thread(target=prepare_images, daemon=True).start()
+if not ON_VERCEL:
+    threading.Thread(target=prepare_images, daemon=True).start()
 
 if __name__ == "__main__":
     # Set FLASK_DEBUG=1 while editing locally for auto-reload. Never enable it on a public host.
