@@ -214,6 +214,26 @@ FAMILY_GROUPS = [
     {"id": "bride-grandparents", "title": "Bride's Grandparents", "title_hi": "दुल्हन के दादा-दादी", "names": "", "names_hi": ""},
 ]
 
+# The two cards in "Meet the family". Each opens a pop-up with all photos of its groups, in this order.
+# Photos still come from static/images/<group id>-1.jpg, <group id>-2.jpg, ... (see FAMILY_GROUPS).
+FAMILY_SIDES = [
+    {
+        "id": "groom",
+        "title": "Groom's Family",
+        "title_hi": "दूल्हे का परिवार",
+        "groups": ["groom-parents", "groom-siblings", "groom-grandparents"],
+    },
+    {
+        "id": "bride",
+        "title": "Bride's Family",
+        "title_hi": "दुल्हन का परिवार",
+        "groups": ["bride-parents", "bride-siblings", "bride-grandparents"],
+    },
+]
+
+# Most photos shown in each family pop-up. Extra photos are ignored, starting from the end of the list.
+MAX_FAMILY_PHOTOS = 10
+
 # Captions for static/images/couple-1.jpg, couple-2.jpg, ... in order.
 MEMORY_CAPTIONS = [
     {
@@ -431,6 +451,32 @@ def get_family_groups():
     return groups
 
 
+def get_family_sides():
+    """One entry per card: a cover photo plus every photo (and caption) shown in its pop-up."""
+    groups = {group["id"]: group for group in get_family_groups()}
+    sides = []
+    for side in FAMILY_SIDES:
+        photos = []
+        for group_id in side["groups"]:
+            group = groups.get(group_id)
+            if not group:
+                continue
+            caption = group["title"] + (f" · {group['names']}" if group["names"] else "")
+            caption_hi = group["title_hi"] + (f" · {group['names_hi'] or group['names']}" if group["names"] else "")
+            for photo in group["photos"]:
+                photos.append(
+                    {
+                        "src": url_for("static", filename=photo["large"]),
+                        "thumb": url_for("static", filename=photo["thumb"]),
+                        "caption": caption,
+                        "caption_hi": caption_hi,
+                    }
+                )
+        if photos:
+            sides.append({**side, "photos": photos, "cover": photos[0]["thumb"]})
+    return sides
+
+
 def get_memories():
     memories = []
     for index, name in enumerate(list_images("couple-")):
@@ -507,7 +553,7 @@ def index():
         wedding_calendar_url=google_calendar_url(EVENTS_BY_ID["wedding"]),
         event_days=get_event_days(),
         venues=get_venues(),
-        family_groups=get_family_groups(),
+        family_sides=get_family_sides(),
         memories=memories,
         albums=[],  # PHOTO_ALBUMS disabled
         # albums=PHOTO_ALBUMS,

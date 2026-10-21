@@ -54,6 +54,41 @@
       if (!window.inviteReady) document.documentElement.classList.remove("js");
     });
   </script>
+  <style>
+    /* Meet the family: two cards that open a photo pop-up */
+    .family-sides { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: clamp(14px, 3vw, 28px); max-width: 760px; margin: 2.2rem auto 0; }
+    @media (max-width: 520px) { .family-sides { grid-template-columns: 1fr; max-width: 340px; } }
+    .family-side { position: relative; display: block; width: 100%; aspect-ratio: 4 / 5; padding: 0; border: 0; border-radius: 22px; overflow: hidden; cursor: pointer; background: #e9d3d6; color: #fff; font: inherit; text-align: center; box-shadow: 0 14px 34px rgba(110, 60, 75, .18); transition: transform .35s ease, box-shadow .35s ease; -webkit-tap-highlight-color: transparent; }
+    .family-side:hover, .family-side:focus-visible { transform: translateY(-4px); box-shadow: 0 20px 44px rgba(110, 60, 75, .28); }
+    .family-side:focus-visible { outline: 3px solid #a45f70; outline-offset: 3px; }
+    .family-side-cover { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; transition: transform .6s ease; }
+    .family-side:hover .family-side-cover { transform: scale(1.05); }
+    .family-side-shade { position: absolute; inset: 0; background: linear-gradient(to top, rgba(50, 20, 30, .8), rgba(50, 20, 30, .05) 62%); }
+    .family-side-text { position: absolute; left: 0; right: 0; bottom: 0; display: flex; flex-direction: column; gap: .35rem; padding: 1.4rem 1rem 1.3rem; }
+    .family-side-title { font-family: "Playfair Display", "Noto Serif Devanagari", Georgia, serif; font-size: clamp(1.35rem, 4vw, 1.7rem); line-height: 1.15; }
+    .family-side-count { font-size: .85rem; letter-spacing: .02em; opacity: .92; }
+
+    .family-modal { position: fixed; inset: 0; z-index: 3000; display: flex; align-items: center; justify-content: center; padding: max(16px, env(safe-area-inset-top)) 16px max(16px, env(safe-area-inset-bottom)); background: rgba(30, 12, 20, .84); -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px); }
+    .family-modal[hidden] { display: none; }
+    .family-modal-panel { width: min(94vw, 720px); max-height: 100%; display: flex; flex-direction: column; align-items: center; gap: .9rem; color: #fff; }
+    .fm-title { margin: 0; padding: 0 3rem; font-family: "Playfair Display", "Noto Serif Devanagari", Georgia, serif; font-size: clamp(1.3rem, 4vw, 1.8rem); font-weight: 500; text-align: center; color: #fff; }
+    .fm-stage { position: relative; width: 100%; display: flex; align-items: center; justify-content: center; gap: .5rem; touch-action: pan-y; }
+    .fm-figure { flex: 1; min-width: 0; margin: 0; text-align: center; }
+    .fm-figure img { display: block; max-width: 100%; max-height: 66vh; margin: 0 auto; object-fit: contain; border-radius: 14px; background: rgba(255, 255, 255, .06); }
+    .fm-figure figcaption { margin-top: .7rem; font-size: .95rem; opacity: .92; }
+    .fm-count { font-size: .85rem; letter-spacing: .08em; opacity: .8; }
+    .fm-arrow, .fm-close { display: flex; align-items: center; justify-content: center; border: 1px solid rgba(255, 255, 255, .4); border-radius: 50%; background: rgba(255, 255, 255, .14); color: #fff; font: inherit; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+    .fm-arrow { flex: none; width: 44px; height: 44px; font-size: 1.3rem; }
+    .fm-arrow[hidden] { display: none; }
+    .fm-close { position: fixed; top: max(12px, env(safe-area-inset-top)); right: 14px; z-index: 1; width: 42px; height: 42px; font-size: 1.6rem; line-height: 1; }
+    .fm-arrow:hover, .fm-close:hover { background: rgba(255, 255, 255, .28); }
+    .fm-arrow:focus-visible, .fm-close:focus-visible { outline: 3px solid #fff; outline-offset: 2px; }
+    @media (max-width: 520px) {
+      .fm-arrow { position: absolute; top: 50%; z-index: 1; transform: translateY(-50%); background: rgba(0, 0, 0, .45); }
+      .fm-prev { left: 6px; }
+      .fm-next { right: 6px; }
+    }
+  </style>
 </head>
 <body>
   <div class="petal-layer" id="petal-layer" aria-hidden="true"></div>
@@ -289,7 +324,7 @@
         {% endif %}
       </section>
 
-      {% if family_groups %}
+      {% if family_sides %}
       <section class="family-section section" id="family">
         <div class="reveal">
           <div class="section-kicker"><span>✿</span> <b data-hi="जिनसे हम हैं">THE PEOPLE WHO MAKE US US</b> <span>✿</span></div>
@@ -297,23 +332,16 @@
           <p class="body-copy" data-hi="वो परिवार और अपने, जिन्होंने हमारी ज़िंदगी को प्यार, हँसी और यादों से भर दिया।">The family and loved ones who have filled our lives with love, laughter, and memories.</p>
         </div>
 
-        <div class="family-grid">
-          {% for family in family_groups %}
-            <article class="family-card reveal">
-              <div class="portrait-row">
-                {% for photo in family.photos %}
-                  <button class="portrait" type="button" data-lightbox="family"
-                          data-src="{{ url_for('static', filename=photo.large) }}"
-                          data-caption="{{ family.title }}{% if family.names %} · {{ family.names }}{% endif %}"
-                          data-caption-hi="{{ family.title_hi }}{% if family.names %} · {{ family.names_hi or family.names }}{% endif %}"
-                          aria-label="View photo: {{ family.title }}">
-                    <img src="{{ url_for('static', filename=photo.thumb) }}" alt="{{ family.title }}" loading="lazy">
-                  </button>
-                {% endfor %}
-              </div>
-              {% if family.names %}<p class="family-names" data-hi="{{ family.names_hi or family.names }}">{{ family.names }}</p>{% endif %}
-              <h3 class="family-relation" data-hi="{{ family.title_hi }}">{{ family.title }}</h3>
-            </article>
+        <div class="family-sides">
+          {% for side in family_sides %}
+            <button class="family-side reveal" type="button" data-family-side="{{ loop.index0 }}" aria-haspopup="dialog">
+              <img class="family-side-cover" src="{{ side.cover }}" alt="" loading="lazy">
+              <span class="family-side-shade" aria-hidden="true"></span>
+              <span class="family-side-text">
+                <span class="family-side-title" data-hi="{{ side.title_hi }}">{{ side.title }}</span>
+                <span class="family-side-count">{{ side.photos | length }} <span data-hi="तस्वीरें">{{ 'photo' if side.photos | length == 1 else 'photos' }}</span> · <span data-hi="देखने के लिए छुएँ">tap to view</span></span>
+              </span>
+            </button>
           {% endfor %}
         </div>
       </section>
@@ -468,6 +496,23 @@
     <button class="lightbox-arrow lightbox-next" id="lightbox-next" type="button" aria-label="Next photo" data-hi-aria-label="अगली तस्वीर">→</button>
   </div>
 
+  <div class="family-modal" id="family-modal" role="dialog" aria-modal="true" aria-labelledby="family-modal-title" hidden>
+    <button class="fm-close" id="fm-close" type="button" aria-label="Close" data-hi-aria-label="बंद करें">×</button>
+    <div class="family-modal-panel">
+      <h3 class="fm-title" id="family-modal-title"></h3>
+      <div class="fm-stage" id="fm-stage">
+        <button class="fm-arrow fm-prev" id="fm-prev" type="button" aria-label="Previous photo" data-hi-aria-label="पिछली तस्वीर">←</button>
+        <figure class="fm-figure">
+          <img id="fm-image" alt="">
+          <figcaption id="fm-caption"></figcaption>
+        </figure>
+        <button class="fm-arrow fm-next" id="fm-next" type="button" aria-label="Next photo" data-hi-aria-label="अगली तस्वीर">→</button>
+      </div>
+      <div class="fm-count" id="fm-count"></div>
+    </div>
+  </div>
+
+  <script type="application/json" id="family-data">{{ family_sides | tojson }}</script>
   <script type="application/json" id="memories-data">{{ memories | tojson }}</script>
   <script type="application/json" id="share-data">{{ {
     "url": page_url,
@@ -476,5 +521,103 @@
     "hi": "प्रियंका और अंकुश की शादी है! 💍 संगीत, हल्दी और विवाह · 7–9 दिसंबर 2026, मुंबई। निमंत्रण देखें:"
   } | tojson }}</script>
   <script src="{{ url_for('static', filename='script.js') }}"></script>
+  <script>
+    // Meet the family: open a pop-up with the photos of one side, one at a time.
+    (function () {
+      var dataEl = document.getElementById("family-data");
+      var modal = document.getElementById("family-modal");
+      if (!dataEl || !modal) return;
+      var sides;
+      try { sides = JSON.parse(dataEl.textContent) || []; } catch (error) { return; }
+
+      var image = document.getElementById("fm-image");
+      var caption = document.getElementById("fm-caption");
+      var count = document.getElementById("fm-count");
+      var title = document.getElementById("family-modal-title");
+      var prev = document.getElementById("fm-prev");
+      var next = document.getElementById("fm-next");
+      var close = document.getElementById("fm-close");
+      var stage = document.getElementById("fm-stage");
+      var current = 0, index = 0, opener = null;
+
+      function isHindi() { return document.documentElement.lang === "hi"; }
+
+      function render() {
+        var side = sides[current];
+        if (!side) return;
+        var total = side.photos.length, photo = side.photos[index];
+        title.textContent = isHindi() ? side.title_hi : side.title;
+        caption.textContent = isHindi() ? (photo.caption_hi || photo.caption) : photo.caption;
+        image.alt = caption.textContent;
+        image.src = photo.src;
+        count.textContent = (index + 1) + " / " + total;
+        prev.hidden = next.hidden = total < 2;
+        if (total > 1) {  // warm the cache for the neighbouring photos
+          [1, -1].forEach(function (step) { new Image().src = side.photos[(index + step + total) % total].src; });
+        }
+      }
+
+      function openModal(sideIndex, trigger) {
+        current = sideIndex; index = 0; opener = trigger;
+        modal.hidden = false;
+        document.body.style.overflow = "hidden";
+        render();
+        close.focus();
+      }
+
+      function closeModal() {
+        modal.hidden = true;
+        document.body.style.overflow = "";
+        image.removeAttribute("src");
+        if (opener) opener.focus();
+      }
+
+      function go(step) {
+        var total = sides[current].photos.length;
+        if (total < 2) return;
+        index = (index + step + total) % total;
+        render();
+      }
+
+      Array.prototype.forEach.call(document.querySelectorAll("[data-family-side]"), function (button) {
+        button.addEventListener("click", function () { openModal(Number(button.getAttribute("data-family-side")), button); });
+      });
+      prev.addEventListener("click", function () { go(-1); });
+      next.addEventListener("click", function () { go(1); });
+      close.addEventListener("click", closeModal);
+
+      // Clicking the dark area around the photo closes the pop-up.
+      modal.addEventListener("click", function (event) {
+        if (!event.target.closest(".fm-figure, .fm-arrow, .fm-close, .fm-title, .fm-count")) closeModal();
+      });
+
+      document.addEventListener("keydown", function (event) {
+        if (modal.hidden) return;
+        if (event.key === "Escape") closeModal();
+        else if (event.key === "ArrowLeft") go(-1);
+        else if (event.key === "ArrowRight") go(1);
+        else if (event.key === "Tab") {  // keep keyboard focus inside the pop-up
+          var items = [close, prev, next].filter(function (el) { return !el.hidden; });
+          var first = items[0], last = items[items.length - 1];
+          if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+          else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+        }
+      });
+
+      // Swipe left/right on phones.
+      var startX = null;
+      stage.addEventListener("touchstart", function (event) { startX = event.changedTouches[0].clientX; }, { passive: true });
+      stage.addEventListener("touchend", function (event) {
+        if (startX === null) return;
+        var deltaX = event.changedTouches[0].clientX - startX;
+        startX = null;
+        if (Math.abs(deltaX) > 40) go(deltaX < 0 ? 1 : -1);
+      }, { passive: true });
+
+      // Keep the pop-up text in step with the English / Hindi toggle.
+      new MutationObserver(function () { if (!modal.hidden) render(); })
+        .observe(document.documentElement, { attributes: true, attributeFilter: ["lang"] });
+    })();
+  </script>
 </body>
 </html>
