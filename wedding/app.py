@@ -211,7 +211,8 @@ FAMILY_GROUPS = [
     {"id": "groom-siblings", "title": "Groom's Siblings", "title_hi": "दूल्हे के भाई-बहन", "names": "", "names_hi": ""},
     {"id": "bride-siblings", "title": "Bride's Siblings", "title_hi": "दुल्हन के भाई-बहन", "names": "", "names_hi": ""},
     {"id": "groom-grandparents", "title": "Groom's Grandparents", "title_hi": "दूल्हे के दादा-दादी", "names": "", "names_hi": ""},
-    {"id": "bride-grandparents", "title": "Bride's Grandparents", "title_hi": "दुल्हन के दादा-दादी", "names": "", "names_hi": ""},
+    {"id": "bride-family", "title": "Bride's Family", "title_hi": "दुल्हन का परिवार", "names": "", "names_hi": ""},
+    {"id": "bride-bua-chachi", "title": "Bride's Bua and chachi", "title_hi": "दुल्हन के बुआ और छाची", "names": "", "names_hi": ""},
 ]
 
 # The two cards in "Meet the family". Each opens a pop-up with all photos of its groups, in this order.
@@ -227,7 +228,7 @@ FAMILY_SIDES = [
         "id": "bride",
         "title": "Bride's Family",
         "title_hi": "दुल्हन का परिवार",
-        "groups": ["bride-parents", "bride-siblings", "bride-grandparents"],
+        "groups": ["bride-parents", "bride-siblings", "bride-family", "bride-bua-chachi"],
     },
 ]
 
