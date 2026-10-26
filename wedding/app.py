@@ -82,10 +82,10 @@ IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".gif", ".webp"}
 IMAGE_SIZES = {"thumb": 600, "medium": 1100, "large": 1920}
 
 WEDDING = {
-    "partner_one": "Priyanka Yadav",
-    "partner_one_hi": "प्रियंका यादव",
-    "partner_two": "Ankoosh Yadav",
-    "partner_two_hi": "अंकुश यादव",
+    "partner_one": "Ankoosh Yadav",
+    "partner_one_hi": "अंकुश यादव",
+    "partner_two": "Priyanka Yadav",
+    "partner_two_hi": "प्रियंका यादव",
     "date_text": "Wednesday, 9 December 2026",
     "date_text_hi": "बुधवार, 9 दिसंबर 2026",
     "date_iso": "2026-12-09T17:00:00+05:30",
@@ -432,7 +432,7 @@ def google_calendar_url(event):
     return "https://calendar.google.com/calendar/render?" + urlencode(
         {
             "action": "TEMPLATE",
-            "text": f"{event['name']} · Priyanka & Ankoosh",
+            "text": f"{event['name']} · Ankoosh & Priyanka",
             "dates": f"{utc_stamp(event['start'])}/{utc_stamp(event['end'])}",
             "details": event["description"],
             "location": venue["address"],
@@ -668,7 +668,7 @@ def event_calendar(event_id):
     lines = [
         "BEGIN:VCALENDAR",
         "VERSION:2.0",
-        "PRODID:-//Priyanka & Ankoosh//Wedding Invitation//EN",
+        "PRODID:-//Ankoosh & Priyanka//Wedding Invitation//EN",
         "CALSCALE:GREGORIAN",
         "METHOD:PUBLISH",
         "BEGIN:VEVENT",
@@ -676,7 +676,7 @@ def event_calendar(event_id):
         f"DTSTAMP:{utc_stamp(datetime.now(timezone.utc))}",
         f"DTSTART:{utc_stamp(event['start'])}",
         f"DTEND:{utc_stamp(event['end'])}",
-        f"SUMMARY:{ics_escape(event['name'] + ' · Priyanka & Ankoosh')}",
+        f"SUMMARY:{ics_escape(event['name'] + ' · Ankoosh & Priyanka')}",
         f"LOCATION:{ics_escape(venue['address'])}",
         f"DESCRIPTION:{ics_escape(event['description'])}",
         "END:VEVENT",
