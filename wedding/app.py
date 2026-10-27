@@ -684,17 +684,21 @@ def send_review_email(wish_id, name, message):
         "<p style=\"color:#777\">It stays hidden on the website until you approve it.</p>",
         subtype="html",
     )
+    stage = "connecting"
     try:
         server = smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT, timeout=10) if SMTP_PORT == 465 else smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=10)
         with server:
             if SMTP_PORT != 465:
+                stage = "starting TLS"
                 server.starttls()
+            stage = "logging in"
             server.login(SMTP_USER, SMTP_PASSWORD)
+            stage = "sending"
             server.send_message(mail)
         report(f"Review email sent for blessing {wish_id} to {NOTIFY_EMAIL}")
         return True
     except Exception as error:  # a failed email must never break the guest's submission
-        report(f"EMAIL NOT SENT for blessing {wish_id}: {type(error).__name__}: {error}. Review link: {link}")
+        report(f"EMAIL NOT SENT for blessing {wish_id} while {stage} ({SMTP_HOST}:{SMTP_PORT}): {type(error).__name__}: {error}. Review link: {link}")
         return False
 
 
