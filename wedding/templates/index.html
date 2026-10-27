@@ -88,6 +88,20 @@
       .fm-prev { left: 6px; }
       .fm-next { right: 6px; }
     }
+    /* Haldi & Sangeet colour palette, shown beside the timeline */
+    .events-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 380px); gap: clamp(20px, 4vw, 48px); align-items: start; max-width: 1120px; margin: 2rem auto 0; }
+    .events-layout .timeline { margin: 0; max-width: none; width: 100%; }
+    .theme-card { position: sticky; top: 1.5rem; margin: clamp(3rem, 8vw, 6rem) 0 0; text-align: center; }
+    .theme-card a { display: block; border-radius: 22px; overflow: hidden; box-shadow: 0 14px 34px rgba(110, 60, 75, .18); transition: transform .35s ease, box-shadow .35s ease; -webkit-tap-highlight-color: transparent; }
+    .theme-card a:hover, .theme-card a:focus-visible { transform: translateY(-4px); box-shadow: 0 20px 44px rgba(110, 60, 75, .28); }
+    .theme-card a:focus-visible { outline: 3px solid #a45f70; outline-offset: 3px; }
+    .theme-card img { display: block; width: 100%; height: auto; }
+    .theme-card figcaption { margin-top: .7rem; font-size: .9rem; opacity: .85; }
+    @media (max-width: 900px) {
+      .events-layout { grid-template-columns: 1fr; }
+      .theme-card { position: static; order: -1; max-width: 360px; margin: 0 auto; }
+      .theme-card figcaption { margin-top: .5rem; }
+    }
   </style>
 </head>
 <body>
@@ -208,6 +222,7 @@
           <p class="body-copy" data-hi="तीन दिन, चार उत्सव। हर एक का अपना जादू है।">Three days, four celebrations. Each one has its own little magic.</p>
         </div>
 
+        <div class="events-layout">
         <div class="timeline">
           {% for day in event_days %}
             <div class="timeline-day">
@@ -246,6 +261,15 @@
               {% endfor %}
             </div>
           {% endfor %}
+        </div>
+        <figure class="theme-card reveal">
+          <a href="{{ url_for('static', filename='images/theme-palette.jpg') }}" target="_blank" rel="noopener"
+             aria-label="Open the Haldi and Sangeet colour palette in full size" data-hi-aria-label="हल्दी और संगीत का रंग-पैलेट बड़े आकार में खोलें">
+            <img src="{{ url_for('static', filename='images/theme-palette.jpg') }}" width="1024" height="1536" loading="lazy"
+                 alt="Colour palette and dress guide for the Haldi and Sangeet ceremonies">
+          </a>
+          <figcaption data-hi="हल्दी और संगीत के लिए हमारा रंग-पैलेट">Our Haldi &amp; Sangeet colour palette</figcaption>
+        </figure>
         </div>
         <p class="event-footnote reveal" data-hi="हम इन खास पलों को आपके साथ मनाने के लिए बेताब हैं।">We can't wait to celebrate these special moments with you.</p>
       </section>
