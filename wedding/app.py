@@ -948,6 +948,34 @@ def delete_wish_command(wish_id):
     click.echo(f"Deleted wish {wish_id}." if deleted else f"No wish with ID {wish_id}.")
 
 
+@app.cli.command("prepare-images")
+def prepare_images_command():
+    """Resize every photo into static/generated/. Run on your computer after adding photos, then commit that folder."""
+    if ON_VERCEL:
+        click.echo("Run this on your own computer, not on Vercel.")
+        return
+    prepare_images()
+
+    def megabytes(folder):
+        try:
+            total = sum(path.stat().st_size for path in folder.iterdir() if path.is_file())
+        except OSError:
+            total = 0
+        return total / 1_000_000
+
+    click.echo(f"Original photos: {megabytes(IMAGE_FOLDER):.1f} MB in {IMAGE_FOLDER}")
+    click.echo(f"Web copies:      {megabytes(GENERATED_FOLDER):.1f} MB in {GENERATED_FOLDER}")
+    click.echo("Now commit and push the static/generated folder so the live site can use these smaller copies.")
+
+
+@app.after_request
+def cache_static_files(response):
+    """Let browsers and Vercel's CDN keep photos and styles instead of asking the app for them every time."""
+    if request.path.startswith("/static/") and response.status_code == 200:
+        response.headers["Cache-Control"] = "public, max-age=86400, s-maxage=604800"
+    return response
+
+
 if not ON_VERCEL:
     threading.Thread(target=prepare_images, daemon=True).start()
 
