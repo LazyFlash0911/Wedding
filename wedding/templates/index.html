@@ -102,6 +102,18 @@
       .theme-card { position: static; order: -1; max-width: 360px; margin: 0 auto; }
       .theme-card figcaption { margin-top: .5rem; }
     }
+    /* Blessings wall: centred grid, "Show more blessings" and per-card "Read more" */
+    .wishes-section .wish-wall { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 320px)); justify-content: center; align-items: stretch; gap: 18px; width: 100%; max-width: 1060px; margin: 2.2rem auto 0; padding: 0; }
+    .wishes-section .wish-card { display: flex; flex-direction: column; position: relative; width: auto; max-width: none; min-width: 0; margin: 0; box-sizing: border-box; animation: wish-in .5s ease both; }
+    .wishes-section .wish-card blockquote { overflow-wrap: anywhere; }
+    .wishes-section .wish-card figcaption { margin-top: auto; padding-top: .7rem; }
+    .js .wishes-section .wish-card.is-extra:not(.is-shown) { display: none; }
+    .wish-card.is-clamped blockquote { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 6; line-clamp: 6; overflow: hidden; }
+    .wish-toggle { align-self: flex-start; margin: .4rem 0 0; padding: 0; border: 0; background: none; color: #a45f70; font: inherit; font-size: .85rem; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+    .wish-toggle:focus-visible { outline: 3px solid #a45f70; outline-offset: 3px; border-radius: 4px; }
+    .wish-more-wrap { display: flex; justify-content: center; margin-top: 1.6rem; }
+    @keyframes wish-in { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: none; } }
+    @media (prefers-reduced-motion: reduce) { .wishes-section .wish-card { animation: none; } }
   </style>
 </head>
 <body>
@@ -459,14 +471,23 @@
         </form>
 
         {% if wishes %}
-          <div class="wish-wall">
+          {# The first 6 blessings show at once; the rest wait behind "Show more blessings". #}
+          <div class="wish-wall" id="wish-wall">
             {% for wish in wishes %}
-              <figure class="wish-card reveal">
+              <figure class="wish-card{% if loop.index > 6 %} is-extra{% endif %}">
                 <blockquote>{{ wish.message }}</blockquote>
+                <button class="wish-toggle" type="button" aria-expanded="false" hidden>
+                  <span class="wish-toggle-more" data-hi="और पढ़ें">Read more</span><span class="wish-toggle-less" data-hi="कम दिखाएँ" hidden>Show less</span>
+                </button>
                 <figcaption>— {{ wish.name }}</figcaption>
               </figure>
             {% endfor %}
           </div>
+          {% if wishes|length > 6 %}
+            <div class="wish-more-wrap">
+              <button class="open-invite" id="wish-show-more" type="button" hidden><span data-hi="और आशीर्वाद देखें">Show more blessings</span> <span aria-hidden="true">♥</span></button>
+            </div>
+          {% endif %}
         {% else %}
           <p class="wish-empty reveal" data-hi="सबसे पहले आशीर्वाद देने वाले बनें।">Be the first to leave a blessing.</p>
         {% endif %}
@@ -641,6 +662,60 @@
       // Keep the pop-up text in step with the English / Hindi toggle.
       new MutationObserver(function () { if (!modal.hidden) render(); })
         .observe(document.documentElement, { attributes: true, attributeFilter: ["lang"] });
+    })();
+  </script>
+  <script>
+    // Blessings wall: reveal 6 more at a time, and trim very long messages behind "Read more".
+    (function () {
+      var wall = document.getElementById("wish-wall");
+      if (!wall) return;
+      var cards = Array.prototype.slice.call(wall.querySelectorAll(".wish-card"));
+      var showMore = document.getElementById("wish-show-more");
+      var BATCH = 6;
+
+      function isShown(card) { return !card.classList.contains("is-extra") || card.classList.contains("is-shown"); }
+
+      // Trim a long blessing to 6 lines and offer "Read more" - only if it really is cut off.
+      function checkClamp(card) {
+        if (!isShown(card) || card.classList.contains("is-open")) return;
+        var quote = card.querySelector("blockquote"), toggle = card.querySelector(".wish-toggle");
+        if (!quote || !toggle) return;
+        card.classList.remove("is-clamped");
+        toggle.hidden = true;
+        if (!quote.clientHeight) return;  // not on screen yet; measured again once it is
+        card.classList.add("is-clamped");
+        if (quote.scrollHeight > quote.clientHeight + 1) toggle.hidden = false;
+        else card.classList.remove("is-clamped");
+      }
+      function checkAll() { cards.forEach(checkClamp); }
+
+      function revealMore() {
+        var waiting = cards.filter(function (card) { return !isShown(card); });
+        waiting.slice(0, BATCH).forEach(function (card) { card.classList.add("is-shown"); checkClamp(card); });
+        if (waiting.length <= BATCH && showMore) showMore.hidden = true;
+      }
+
+      wall.addEventListener("click", function (event) {
+        var toggle = event.target.closest(".wish-toggle");
+        if (!toggle) return;
+        var card = toggle.closest(".wish-card");
+        var open = card.classList.toggle("is-open");
+        card.classList.toggle("is-clamped", !open);
+        toggle.setAttribute("aria-expanded", open ? "true" : "false");
+        toggle.querySelector(".wish-toggle-more").hidden = open;
+        toggle.querySelector(".wish-toggle-less").hidden = !open;
+      });
+
+      if (showMore) {
+        showMore.hidden = !cards.some(function (card) { return !isShown(card); });
+        showMore.addEventListener("click", revealMore);
+      }
+
+      checkAll();
+      if (document.fonts && document.fonts.ready) document.fonts.ready.then(checkAll);
+      if ("IntersectionObserver" in window) new IntersectionObserver(function (entries) { if (entries[0].isIntersecting) checkAll(); }).observe(wall);
+      var resizeTimer;
+      window.addEventListener("resize", function () { clearTimeout(resizeTimer); resizeTimer = setTimeout(checkAll, 150); });
     })();
   </script>
 </body>
