@@ -1,4 +1,5 @@
 import hmac
+import json
 import os
 import re
 import secrets
@@ -7,6 +8,8 @@ import sqlite3
 import sys
 import threading
 import time
+import urllib.error
+import urllib.request
 from datetime import datetime, timedelta, timezone
 from email.message import EmailMessage
 from html import escape as html_escape
@@ -82,6 +85,10 @@ SMTP_PORT = int(os.environ.get("SMTP_PORT", "587"))
 SMTP_USER = os.environ.get("SMTP_USER", "")
 SMTP_PASSWORD = os.environ.get("SMTP_PASSWORD", "")
 MAIL_FROM = os.environ.get("MAIL_FROM", "") or SMTP_USER
+# Alternative to SMTP: send the email through Resend's web API (works where Gmail's SMTP is refused).
+# Without a verified domain, Resend only delivers to the address you signed up with, so use that as NOTIFY_EMAIL.
+RESEND_API_KEY = os.environ.get("RESEND_API_KEY", "")
+RESEND_FROM = os.environ.get("RESEND_FROM", "") or "Wedding invitation <onboarding@resend.dev>"
 WISH_REVIEW_MAX_AGE = 60 * 60 * 24 * 30  # review links stop working after 30 days
 
 # Vercel's /tmp is wiped regularly, so on Vercel blessings must live in a real database.
@@ -657,48 +664,78 @@ def report(text):
 def send_review_email(wish_id, name, message):
     """Email the couple a private link to approve or reject a new blessing. Never raises."""
     link = site_url() + url_for("review_wish", token=review_serializer().dumps(wish_id))
-    missing = [
-        setting for setting, value in (("NOTIFY_EMAIL", NOTIFY_EMAIL), ("SMTP_USER", SMTP_USER), ("SMTP_PASSWORD", SMTP_PASSWORD))
-        if not value
-    ]
+    use_resend = bool(RESEND_API_KEY)
+    settings = [("NOTIFY_EMAIL", NOTIFY_EMAIL)]
+    settings += [("RESEND_API_KEY", RESEND_API_KEY)] if use_resend else [("SMTP_USER", SMTP_USER), ("SMTP_PASSWORD", SMTP_PASSWORD)]
+    missing = [setting for setting, value in settings if not value]
     if missing:
         report(f"EMAIL NOT SENT for blessing {wish_id}: these settings are empty: {', '.join(missing)}. Review link: {link}")
         return False
 
-    mail = EmailMessage()
-    mail["Subject"] = f"New blessing from {name} - approve?"
-    mail["From"] = MAIL_FROM
-    mail["To"] = NOTIFY_EMAIL
-    mail.set_content(
+    subject = f"New blessing from {name} - approve?"
+    text_body = (
         f"{name} left a blessing on your wedding website:\n\n"
         f"\"{message}\"\n\n"
         f"Approve or reject it here:\n{link}\n\n"
         "It stays hidden on the website until you approve it."
     )
-    mail.add_alternative(
+    html_body = (
         f"<p><b>{html_escape(name)}</b> left a blessing on your wedding website:</p>"
         f"<blockquote style=\"margin:12px 0;padding-left:12px;border-left:3px solid #a45f70\">"
         f"{html_escape(message).replace(chr(10), '<br>')}</blockquote>"
         f"<p><a href=\"{html_escape(link)}\" style=\"display:inline-block;padding:10px 18px;background:#a45f70;"
         f"color:#fff;text-decoration:none;border-radius:999px\">Approve or reject</a></p>"
-        "<p style=\"color:#777\">It stays hidden on the website until you approve it.</p>",
-        subtype="html",
+        "<p style=\"color:#777\">It stays hidden on the website until you approve it.</p>"
     )
     stage = "connecting"
+    where = "Resend" if use_resend else f"{SMTP_HOST}:{SMTP_PORT}"
     try:
-        server = smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT, timeout=10) if SMTP_PORT == 465 else smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=10)
-        with server:
-            if SMTP_PORT != 465:
-                stage = "starting TLS"
-                server.starttls()
-            stage = "logging in"
-            server.login(SMTP_USER, SMTP_PASSWORD)
-            stage = "sending"
-            server.send_message(mail)
-        report(f"Review email sent for blessing {wish_id} to {NOTIFY_EMAIL}")
+        if use_resend:
+            stage = "calling the Resend API"
+            api_request = urllib.request.Request(
+                "https://api.resend.com/emails",
+                data=json.dumps({
+                    "from": RESEND_FROM,
+                    "to": [address.strip() for address in NOTIFY_EMAIL.split(",") if address.strip()],
+                    "subject": subject,
+                    "text": text_body,
+                    "html": html_body,
+                }).encode("utf-8"),
+                method="POST",
+                headers={
+                    "Authorization": f"Bearer {RESEND_API_KEY}",
+                    "Content-Type": "application/json",
+                    "User-Agent": "wedding-invitation/1.0",
+                },
+            )
+            with urllib.request.urlopen(api_request, timeout=10) as response:
+                response.read()
+        else:
+            mail = EmailMessage()
+            mail["Subject"] = subject
+            mail["From"] = MAIL_FROM
+            mail["To"] = NOTIFY_EMAIL
+            mail.set_content(text_body)
+            mail.add_alternative(html_body, subtype="html")
+            server = smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT, timeout=10) if SMTP_PORT == 465 else smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=10)
+            with server:
+                if SMTP_PORT != 465:
+                    stage = "starting TLS"
+                    server.starttls()
+                stage = "logging in"
+                server.login(SMTP_USER, SMTP_PASSWORD)
+                stage = "sending"
+                server.send_message(mail)
+        report(f"Review email sent for blessing {wish_id} to {NOTIFY_EMAIL} via {where}")
         return True
     except Exception as error:  # a failed email must never break the guest's submission
-        report(f"EMAIL NOT SENT for blessing {wish_id} while {stage} ({SMTP_HOST}:{SMTP_PORT}): {type(error).__name__}: {error}. Review link: {link}")
+        detail = f"{type(error).__name__}: {error}"
+        if isinstance(error, urllib.error.HTTPError):
+            try:
+                detail += " - " + error.read().decode("utf-8", "replace")[:300]
+            except Exception:
+                pass
+        report(f"EMAIL NOT SENT for blessing {wish_id} while {stage} ({where}): {detail}. Review link: {link}")
         return False
 
 
