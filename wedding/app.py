@@ -2,10 +2,13 @@ import hmac
 import os
 import re
 import secrets
+import smtplib
 import sqlite3
 import threading
 import time
 from datetime import datetime, timedelta, timezone
+from email.message import EmailMessage
+from html import escape as html_escape
 from pathlib import Path
 from urllib.parse import urlencode
 
@@ -21,10 +24,12 @@ from flask import (
     get_flashed_messages,
     redirect,
     render_template,
+    render_template_string,
     request,
     session,
     url_for,
 )
+from itsdangerous import BadSignature, URLSafeTimedSerializer
 from markupsafe import Markup
 from PIL import Image, ImageOps
 from werkzeug.middleware.proxy_fix import ProxyFix
@@ -66,6 +71,21 @@ SITE_URL = os.environ.get("SITE_URL", "").rstrip("/")
 # Optional: a password for /admin/wishes, where inappropriate wishes can be removed.
 # The admin page is switched off while this is empty.
 WISHES_ADMIN_PASSWORD = os.environ.get("WISHES_ADMIN_PASSWORD", "")
+
+# Guest blessings stay hidden until the couple approve them. Each new blessing is emailed to
+# NOTIFY_EMAIL (several addresses can be separated by commas) with a private approve / reject link.
+# For Gmail, SMTP_PASSWORD must be an "app password" (Google Account > Security > App passwords).
+NOTIFY_EMAIL = os.environ.get("NOTIFY_EMAIL", "")
+SMTP_HOST = os.environ.get("SMTP_HOST", "smtp.gmail.com")
+SMTP_PORT = int(os.environ.get("SMTP_PORT", "587"))
+SMTP_USER = os.environ.get("SMTP_USER", "")
+SMTP_PASSWORD = os.environ.get("SMTP_PASSWORD", "")
+MAIL_FROM = os.environ.get("MAIL_FROM", "") or SMTP_USER
+WISH_REVIEW_MAX_AGE = 60 * 60 * 24 * 30  # review links stop working after 30 days
+
+# Vercel's /tmp is wiped regularly, so on Vercel blessings must live in a real database.
+# Add a free Postgres (e.g. Neon from the Vercel Marketplace); it sets DATABASE_URL for you.
+DATABASE_URL = os.environ.get("DATABASE_URL") or os.environ.get("POSTGRES_URL") or ""
 
 app = Flask(__name__)
 app.secret_key = load_secret_key()
@@ -283,7 +303,7 @@ CONTACTS = []
 
 # Messages flashed after a wish is submitted, in both languages.
 FLASH_MESSAGES = {
-    "wish-saved": ("Thank you! Your blessing has been added.", "धन्यवाद! आपका आशीर्वाद जुड़ गया है।"),
+    "wish-saved": ("Thank you! Your blessing will appear here once we have approved it.", "धन्यवाद! हमारी स्वीकृति के बाद आपका आशीर्वाद यहाँ दिखाई देगा।"),
     "wish-missing": ("Please add your name and a message.", "कृपया अपना नाम और संदेश लिखें।"),
     "wish-too-long": ("Please keep your name under 60 and your message under 500 characters.", "कृपया नाम 60 और संदेश 500 अक्षरों से कम रखें।"),
     "wish-too-soon": ("Please wait a moment before sending another blessing.", "कृपया अगला संदेश भेजने से पहले थोड़ा रुकें।"),
@@ -514,15 +534,39 @@ def get_venues():
 
 def get_db():
     if "db" not in g:
-        INSTANCE_FOLDER.mkdir(exist_ok=True)
-        g.db = sqlite3.connect(WISHES_DB)
-        g.db.row_factory = sqlite3.Row
-        g.db.execute(
-            "CREATE TABLE IF NOT EXISTS wishes ("
-            "id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, "
-            "message TEXT NOT NULL, created_at TEXT NOT NULL)"
-        )
+        if DATABASE_URL:
+            import psycopg
+            from psycopg.rows import dict_row
+
+            # prepare_threshold=None keeps this working behind a pooled (pgbouncer) connection string.
+            connection = psycopg.connect(DATABASE_URL, row_factory=dict_row, prepare_threshold=None, connect_timeout=10)
+            connection.execute(
+                "CREATE TABLE IF NOT EXISTS wishes ("
+                "id SERIAL PRIMARY KEY, name TEXT NOT NULL, message TEXT NOT NULL, "
+                "created_at TEXT NOT NULL, approved INTEGER NOT NULL DEFAULT 0)"
+            )
+        else:
+            INSTANCE_FOLDER.mkdir(parents=True, exist_ok=True)
+            connection = sqlite3.connect(WISHES_DB)
+            connection.row_factory = sqlite3.Row
+            connection.execute(
+                "CREATE TABLE IF NOT EXISTS wishes ("
+                "id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, "
+                "message TEXT NOT NULL, created_at TEXT NOT NULL, approved INTEGER NOT NULL DEFAULT 0)"
+            )
+            columns = [row["name"] for row in connection.execute("PRAGMA table_info(wishes)")]
+            if "approved" not in columns:  # database from before approvals: keep those blessings visible
+                connection.execute("ALTER TABLE wishes ADD COLUMN approved INTEGER NOT NULL DEFAULT 1")
+        connection.commit()
+        g.db = connection
     return g.db
+
+
+def db_execute(sql, params=()):
+    """Run a query on either database; write queries with ? placeholders."""
+    if DATABASE_URL:
+        sql = sql.replace("?", "%s")
+    return get_db().execute(sql, params)
 
 
 @app.teardown_appcontext
@@ -542,8 +586,8 @@ def index():
         for category, key in get_flashed_messages(with_categories=True)
         if key in FLASH_MESSAGES
     ]
-    wishes = get_db().execute(
-        "SELECT name, message FROM wishes ORDER BY id DESC LIMIT 60"
+    wishes = db_execute(
+        "SELECT name, message FROM wishes WHERE approved = 1 ORDER BY id DESC LIMIT 60"
     ).fetchall()
     music_file = STATIC_FOLDER / "music.mp3"
     return render_template(
@@ -587,15 +631,119 @@ def add_wish():
         flash("wish-too-soon", "error")
         return back
 
-    db = get_db()
-    db.execute(
-        "INSERT INTO wishes (name, message, created_at) VALUES (?, ?, ?)",
+    cursor = db_execute(
+        "INSERT INTO wishes (name, message, created_at, approved) VALUES (?, ?, ?, 0)"
+        + (" RETURNING id" if DATABASE_URL else ""),
         (name, message, datetime.now(timezone.utc).isoformat(timespec="seconds")),
     )
-    db.commit()
+    wish_id = cursor.fetchone()["id"] if DATABASE_URL else cursor.lastrowid
+    get_db().commit()
+    send_review_email(wish_id, name, message)
     session["last_wish_at"] = time.time()
     flash("wish-saved", "success")
     return back
+
+
+def review_serializer():
+    return URLSafeTimedSerializer(app.secret_key, salt="wish-review")
+
+
+def send_review_email(wish_id, name, message):
+    """Email the couple a private link to approve or reject a new blessing. Never raises."""
+    link = site_url() + url_for("review_wish", token=review_serializer().dumps(wish_id))
+    if not (NOTIFY_EMAIL and SMTP_USER and SMTP_PASSWORD):
+        app.logger.warning("Email is not set up, so blessing %s was not emailed. Review link: %s", wish_id, link)
+        return False
+
+    mail = EmailMessage()
+    mail["Subject"] = f"New blessing from {name} - approve?"
+    mail["From"] = MAIL_FROM
+    mail["To"] = NOTIFY_EMAIL
+    mail.set_content(
+        f"{name} left a blessing on your wedding website:\n\n"
+        f"\"{message}\"\n\n"
+        f"Approve or reject it here:\n{link}\n\n"
+        "It stays hidden on the website until you approve it."
+    )
+    mail.add_alternative(
+        f"<p><b>{html_escape(name)}</b> left a blessing on your wedding website:</p>"
+        f"<blockquote style=\"margin:12px 0;padding-left:12px;border-left:3px solid #a45f70\">"
+        f"{html_escape(message).replace(chr(10), '<br>')}</blockquote>"
+        f"<p><a href=\"{html_escape(link)}\" style=\"display:inline-block;padding:10px 18px;background:#a45f70;"
+        f"color:#fff;text-decoration:none;border-radius:999px\">Approve or reject</a></p>"
+        "<p style=\"color:#777\">It stays hidden on the website until you approve it.</p>",
+        subtype="html",
+    )
+    try:
+        server = smtplib.SMTP_SSL(SMTP_HOST, SMTP_PORT, timeout=10) if SMTP_PORT == 465 else smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=10)
+        with server:
+            if SMTP_PORT != 465:
+                server.starttls()
+            server.login(SMTP_USER, SMTP_PASSWORD)
+            server.send_message(mail)
+        return True
+    except (OSError, smtplib.SMTPException):
+        app.logger.exception("Could not email blessing %s. Review link: %s", wish_id, link)
+        return False
+
+
+REVIEW_PAGE = """<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>Review a blessing</title>
+<style>
+  body { margin: 0; min-height: 100vh; display: grid; place-items: center; padding: 20px; background: #f6e6e8; color: #4a2c36; font: 17px/1.5 Georgia, serif; }
+  main { width: min(100%, 460px); padding: 28px 24px; background: #fff; border-radius: 22px; box-shadow: 0 14px 34px rgba(110, 60, 75, .18); text-align: center; }
+  blockquote { margin: 1rem 0; font-style: italic; white-space: pre-wrap; overflow-wrap: anywhere; }
+  .from { color: #a45f70; }
+  .buttons { display: flex; gap: 12px; justify-content: center; margin-top: 1.4rem; }
+  button { padding: 12px 22px; border: 0; border-radius: 999px; font: inherit; cursor: pointer; }
+  .approve { background: #a45f70; color: #fff; }
+  .reject { background: #eadbde; color: #4a2c36; }
+</style></head>
+<body><main>
+{% if result == "approved" %}
+  <h1>Approved &#10084;</h1><p>This blessing is now showing on your website.</p>
+{% elif result == "rejected" %}
+  <h1>Removed</h1><p>This blessing has been deleted and will not appear.</p>
+{% elif not wish %}
+  <h1>Not found</h1><p>This blessing is no longer here. It may already have been removed.</p>
+{% elif wish["approved"] %}
+  <h1>Already approved</h1><blockquote>{{ wish["message"] }}</blockquote><p class="from">&mdash; {{ wish["name"] }}</p>
+{% else %}
+  <h1>New blessing</h1>
+  <blockquote>{{ wish["message"] }}</blockquote>
+  <p class="from">&mdash; {{ wish["name"] }}</p>
+  <form method="post" class="buttons">
+    <button class="approve" type="submit" name="action" value="approve">Approve</button>
+    <button class="reject" type="submit" name="action" value="reject">Reject</button>
+  </form>
+{% endif %}
+</main></body></html>"""
+
+
+@app.route("/wishes/review/<token>", methods=["GET", "POST"])
+def review_wish(token):
+    """Private page opened from the email. The signed link is the password; it expires after 30 days."""
+    try:
+        wish_id = review_serializer().loads(token, max_age=WISH_REVIEW_MAX_AGE)
+    except BadSignature:  # also covers expired links
+        abort(404)
+    wish = db_execute("SELECT id, name, message, approved FROM wishes WHERE id = ?", (wish_id,)).fetchone()
+    result = None
+    # Approving needs a button press (POST), so email scanners that just open links can't approve by accident.
+    if wish and request.method == "POST":
+        action = request.form.get("action")
+        if action == "approve":
+            db_execute("UPDATE wishes SET approved = 1 WHERE id = ?", (wish_id,))
+            result = "approved"
+        elif action == "reject":
+            db_execute("DELETE FROM wishes WHERE id = ?", (wish_id,))
+            result = "rejected"
+        get_db().commit()
+    page = render_template_string(REVIEW_PAGE, wish=wish, result=result)
+    return page, 200, {"Cache-Control": "no-store", "X-Robots-Tag": "noindex"}
 
 
 def admin_enabled():
@@ -618,7 +766,7 @@ def admin_wishes():
         error = "That password is not correct."
     wishes = []
     if session.get("admin"):
-        wishes = get_db().execute(
+        wishes = db_execute(
             "SELECT id, name, message, created_at FROM wishes ORDER BY id DESC"
         ).fetchall()
     return render_template("admin_wishes.html", wishes=wishes, logged_in=session.get("admin", False), error=error)
@@ -630,9 +778,8 @@ def admin_delete_wish(wish_id):
         abort(404)
     if not csrf_valid():
         abort(400)
-    db = get_db()
-    db.execute("DELETE FROM wishes WHERE id = ?", (wish_id,))
-    db.commit()
+    db_execute("DELETE FROM wishes WHERE id = ?", (wish_id,))
+    get_db().commit()
     return redirect(url_for("admin_wishes"))
 
 
@@ -722,10 +869,21 @@ def qr_codes():
 
 @app.cli.command("list-wishes")
 def list_wishes_command():
-    """Show all guest wishes with their IDs."""
+    """Show all guest wishes with their IDs and whether they are approved."""
     with app.app_context():
-        for row in get_db().execute("SELECT id, created_at, name, message FROM wishes ORDER BY id"):
-            click.echo(f"{row['id']}\t{row['created_at']}\t{row['name']}: {row['message']}")
+        for row in db_execute("SELECT id, created_at, name, message, approved FROM wishes ORDER BY id"):
+            status = "approved" if row["approved"] else "PENDING"
+            click.echo(f"{row['id']}\t{status}\t{row['created_at']}\t{row['name']}: {row['message']}")
+
+
+@app.cli.command("approve-wish")
+@click.argument("wish_id", type=int)
+def approve_wish_command(wish_id):
+    """Approve a guest wish by its ID (see list-wishes), e.g. if the email never arrived."""
+    with app.app_context():
+        updated = db_execute("UPDATE wishes SET approved = 1 WHERE id = ?", (wish_id,)).rowcount
+        get_db().commit()
+    click.echo(f"Approved wish {wish_id}." if updated else f"No wish with ID {wish_id}.")
 
 
 @app.cli.command("delete-wish")
@@ -733,9 +891,8 @@ def list_wishes_command():
 def delete_wish_command(wish_id):
     """Remove a guest wish by its ID (see list-wishes)."""
     with app.app_context():
-        db = get_db()
-        deleted = db.execute("DELETE FROM wishes WHERE id = ?", (wish_id,)).rowcount
-        db.commit()
+        deleted = db_execute("DELETE FROM wishes WHERE id = ?", (wish_id,)).rowcount
+        get_db().commit()
     click.echo(f"Deleted wish {wish_id}." if deleted else f"No wish with ID {wish_id}.")
 
 
