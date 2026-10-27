@@ -4,6 +4,7 @@ import re
 import secrets
 import smtplib
 import sqlite3
+import sys
 import threading
 import time
 from datetime import datetime, timedelta, timezone
@@ -648,11 +649,20 @@ def review_serializer():
     return URLSafeTimedSerializer(app.secret_key, salt="wish-review")
 
 
+def report(text):
+    """Write a line straight to the runtime logs (Vercel shows stderr), without any buffering."""
+    print(text, file=sys.stderr, flush=True)
+
+
 def send_review_email(wish_id, name, message):
     """Email the couple a private link to approve or reject a new blessing. Never raises."""
     link = site_url() + url_for("review_wish", token=review_serializer().dumps(wish_id))
-    if not (NOTIFY_EMAIL and SMTP_USER and SMTP_PASSWORD):
-        app.logger.warning("Email is not set up, so blessing %s was not emailed. Review link: %s", wish_id, link)
+    missing = [
+        setting for setting, value in (("NOTIFY_EMAIL", NOTIFY_EMAIL), ("SMTP_USER", SMTP_USER), ("SMTP_PASSWORD", SMTP_PASSWORD))
+        if not value
+    ]
+    if missing:
+        report(f"EMAIL NOT SENT for blessing {wish_id}: these settings are empty: {', '.join(missing)}. Review link: {link}")
         return False
 
     mail = EmailMessage()
@@ -681,9 +691,10 @@ def send_review_email(wish_id, name, message):
                 server.starttls()
             server.login(SMTP_USER, SMTP_PASSWORD)
             server.send_message(mail)
+        report(f"Review email sent for blessing {wish_id} to {NOTIFY_EMAIL}")
         return True
-    except (OSError, smtplib.SMTPException):
-        app.logger.exception("Could not email blessing %s. Review link: %s", wish_id, link)
+    except Exception as error:  # a failed email must never break the guest's submission
+        report(f"EMAIL NOT SENT for blessing {wish_id}: {type(error).__name__}: {error}. Review link: {link}")
         return False
 
 
