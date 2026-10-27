@@ -980,5 +980,5 @@ if not ON_VERCEL:
     threading.Thread(target=prepare_images, daemon=True).start()
 
 if __name__ == "__main__":
-    # Set FLASK_DEBUG=1 while editing locally for auto-reload. Never enable it on a public host.
+    # Set FLASK_DEBUG=1 while editing locally for auto-reload. Never enable it on a public host .
     app.run(debug=os.environ.get("FLASK_DEBUG") == "1")
