@@ -356,6 +356,11 @@
   document.addEventListener("click", (event) => {
     const trigger = event.target.closest("[data-lightbox]");
     if (!trigger) return;
+    if (trigger.tagName === "A") {
+      // Links keep a plain href as a fallback; a normal click opens the popup instead of a new page.
+      if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+      event.preventDefault();
+    }
     const group = Array.from(document.querySelectorAll(`[data-lightbox="${trigger.dataset.lightbox}"]`));
     const items = group.map((element) => ({
       src: element.dataset.src,

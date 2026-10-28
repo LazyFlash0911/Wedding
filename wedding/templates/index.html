@@ -99,7 +99,7 @@
     .theme-card figcaption { margin-top: .7rem; font-size: .9rem; opacity: .85; }
     @media (max-width: 900px) {
       .events-layout { grid-template-columns: 1fr; }
-      .theme-card { position: static; order: -1; max-width: 360px; margin: 0 auto; }
+      .theme-card { position: static; max-width: 360px; margin: 1rem auto 0; }
       .theme-card figcaption { margin-top: .5rem; }
     }
     /* Blessings wall: centred grid, "Show more blessings" and per-card "Read more" */
@@ -258,7 +258,7 @@
                       <dt data-hi="ड्रेस कोड">DRESS CODE</dt>
                       {% set dc = event.dress_code.split("\n") %}
                       {% set dc_hi = event.dress_code_hi.split("\n") %}
-                      <dd data-hi-html="{{ dc_hi[0] | trim }}{% if dc_hi | length > 1 %}<span class='dress-colors'>{{ dc_hi[1] | trim }}</span>{% endif %}">{{ dc[0] | trim }}{% if dc | length > 1 %}<span class="dress-colors">{{ dc[1] | trim }}</span>{% endif %}</dd>
+                      <dd data-hi-html="{{ dc_hi[0] | trim }}{% if dc_hi | length > 1 %}<a class='dress-colors' href='{{ url_for('static', filename='images/theme-palette.jpg') }}' data-lightbox='palette-{{ event.id }}' data-src='{{ url_for('static', filename='images/theme-palette.jpg') }}' data-caption='Our Haldi and Sangeet colour palette' data-caption-hi='हल्दी और संगीत के लिए हमारा रंग-पैलेट'>{{ dc_hi[1] | trim }}</a>{% endif %}">{{ dc[0] | trim }}{% if dc | length > 1 %}<a class="dress-colors" href="{{ url_for('static', filename='images/theme-palette.jpg') }}" data-lightbox="palette-{{ event.id }}" data-src="{{ url_for("static", filename="images/theme-palette.jpg") }}" data-caption="Our Haldi and Sangeet colour palette" data-caption-hi="हल्दी और संगीत के लिए हमारा रंग-पैलेट">{{ dc[1] | trim }}</a>{% endif %}</dd>
                     </div>
                   </dl>
                   <div class="event-actions">
@@ -277,7 +277,7 @@
           {% endfor %}
         </div>
         <figure class="theme-card reveal">
-          <a href="{{ url_for('static', filename='images/theme-palette.jpg') }}" target="_blank" rel="noopener"
+          <a href="{{ url_for('static', filename='images/theme-palette.jpg') }}" data-lightbox="palette-card" data-src="{{ url_for('static', filename='images/theme-palette.jpg') }}" data-caption="Our Haldi &amp; Sangeet colour palette" data-caption-hi="हल्दी और संगीत के लिए हमारा रंग-पैलेट"
              aria-label="Open the Haldi and Sangeet colour palette in full size" data-hi-aria-label="हल्दी और संगीत का रंग-पैलेट बड़े आकार में खोलें">
             <img src="{{ url_for('static', filename='images/theme-palette.jpg') }}" width="1024" height="1536" loading="lazy"
                  alt="Colour palette and dress guide for the Haldi and Sangeet ceremonies">

@@ -178,7 +178,8 @@ html.js:not(.intro-skipped) .page { opacity: 0; }
 .event-details dt { margin-bottom: 6px; color: var(--sage); font-size: .64rem; font-weight: 700; letter-spacing: .16em; }
 .event-details dd { margin: 0; font-size: .86rem; font-weight: 600; line-height: 1.55; }
 .event-details dd small { display: block; margin-top: 4px; color: var(--muted); font-size: .76rem; font-weight: 400; line-height: 1.6; }
-.event-details dd .dress-colors { display: block; margin-top: 8px; font-weight: 700; }
+.event-details dd .dress-colors { display: block; width: fit-content; margin-top: 8px; font-weight: 700; text-decoration: underline; text-underline-offset: 3px; cursor: pointer; }
+.event-details dd .dress-colors:hover, .event-details dd .dress-colors:focus-visible { text-decoration-thickness: 2px; opacity: .85; }
 #event-sangeet .dress-colors { color: #50C878; }
 #event-groom-haldi .dress-colors, #event-bride-haldi .dress-colors { color: #F28500; }
 .event-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 22px; }
