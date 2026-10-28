@@ -256,7 +256,9 @@
                     </div>
                     <div>
                       <dt data-hi="ड्रेस कोड">DRESS CODE</dt>
-                      <dd data-hi="{{ event.dress_code_hi }}">{{ event.dress_code }}</dd>
+                      {% set dc = event.dress_code.split("\n") %}
+                      {% set dc_hi = event.dress_code_hi.split("\n") %}
+                      <dd data-hi-html="{{ dc_hi[0] | trim }}{% if dc_hi | length > 1 %}<span class='dress-colors'>{{ dc_hi[1] | trim }}</span>{% endif %}">{{ dc[0] | trim }}{% if dc | length > 1 %}<span class="dress-colors">{{ dc[1] | trim }}</span>{% endif %}</dd>
                     </div>
                   </dl>
                   <div class="event-actions">

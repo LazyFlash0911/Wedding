@@ -164,8 +164,8 @@ EVENTS = [
         "icon": "♪",
         "description": "An evening of music, dance, laughter, and celebration with both families.",
         "description_hi": "दोनों परिवारों के साथ संगीत, नृत्य, हँसी और उत्सव से भरी एक शाम।",
-        "dress_code": "Festive glam: Indo-western, lehengas or sharp kurtas",
-        "dress_code_hi": "उत्सवी अंदाज़: इंडो-वेस्टर्न, लहंगा या शानदार कुर्ता",
+        "dress_code": "Festive glam: Indo-western, lehengas or sharp kurtas\nColors: Refer to the Image attached",
+        "dress_code_hi": "उत्सवी अंदाज़: इंडो-वेस्टर्न, लहंगा या शानदार कुर्ता\nरंग: संलग्न छवि देखें",
         "accent": "plum",
     },
     {
@@ -184,8 +184,8 @@ EVENTS = [
         "icon": "✿",
         "description": "Traditional rituals, joyful blessings, and happy moments with Ankoosh's loved ones.",
         "description_hi": "अंकुश के अपनों के साथ पारंपरिक रस्में, आशीर्वाद और खुशियों भरे पल।",
-        "dress_code": "Shades of yellow: wear something you don't mind getting haldi on",
-        "dress_code_hi": "पीले रंग के परिधान: ऐसे कपड़े पहनें जिन पर हल्दी लग जाए तो चिंता न हो",
+        "dress_code": "Wear something you don't mind getting haldi on\nColors: Refer to the Image attached",
+        "dress_code_hi": "पीले रंग के परिधान: ऐसे कपड़े पहनें जिन पर हल्दी लग जाए तो चिंता न हो\nरंग: संलग्न छवि देखें",
         "accent": "gold",
     },
     {
@@ -204,8 +204,8 @@ EVENTS = [
         "icon": "✿",
         "description": "A beautiful morning of flowers, traditional rituals, and family blessings for Priyanka.",
         "description_hi": "प्रियंका के लिए फूलों, पारंपरिक रस्मों और परिवार के आशीर्वाद से सजी एक सुंदर सुबह।",
-        "dress_code": "Shades of yellow: wear something you don't mind getting haldi on",
-        "dress_code_hi": "पीले रंग के परिधान: ऐसे कपड़े पहनें जिन पर हल्दी लग जाए तो चिंता न हो",
+        "dress_code": "Wear something you don't mind getting haldi on\nColors: Refer to the Image attached",
+        "dress_code_hi": "ऐसे कपड़े पहनें जिन पर हल्दी लग जाए तो चिंता न हो\nरंग: संलग्न छवि देखें",
         "accent": "marigold",
     },
     {
