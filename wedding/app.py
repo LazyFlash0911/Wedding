@@ -1,3 +1,4 @@
+import hashlib
 import hmac
 import json
 import os
@@ -12,6 +13,7 @@ import urllib.error
 import urllib.request
 from datetime import datetime, timedelta, timezone
 from email.message import EmailMessage
+from functools import lru_cache
 from html import escape as html_escape
 from pathlib import Path
 from urllib.parse import urlencode
@@ -240,7 +242,7 @@ FAMILY_GROUPS = [
     {"id": "bride-siblings", "title": "Bride's Siblings", "title_hi": "दुल्हन के भाई-बहन", "names": "", "names_hi": ""},
     {"id": "groom-grandparents", "title": "Groom's Grandparents", "title_hi": "दूल्हे के दादा-दादी", "names": "", "names_hi": ""},
     {"id": "bride-family", "title": "Bride's Family", "title_hi": "दुल्हन का परिवार", "names": "", "names_hi": ""},
-    {"id": "bride-bua-chachi", "title": "Bride's Bua and chachi", "title_hi": "दुल्हन के बुआ और छाची", "names": "", "names_hi": ""},
+    {"id": "groom-family", "title": "Groom's Family", "title_hi": "दूल्हे का परिवार", "names": "", "names_hi": ""},
 ]
 
 # The two cards in "Meet the family". Each opens a pop-up with all photos of its groups, in this order.
@@ -250,13 +252,13 @@ FAMILY_SIDES = [
         "id": "groom",
         "title": "Groom's Family",
         "title_hi": "दूल्हे का परिवार",
-        "groups": ["groom-parents", "groom-siblings", "groom-grandparents"],
+        "groups": ["groom-parents", "groom-siblings", "groom-grandparents", "groom-family"],
     },
     {
         "id": "bride",
         "title": "Bride's Family",
         "title_hi": "दुल्हन का परिवार",
-        "groups": ["bride-parents", "bride-siblings", "bride-family", "bride-bua-chachi"],
+        "groups": ["bride-parents", "bride-siblings", "bride-family"],
     },
 ]
 
@@ -966,6 +968,24 @@ def prepare_images_command():
     click.echo(f"Original photos: {megabytes(IMAGE_FOLDER):.1f} MB in {IMAGE_FOLDER}")
     click.echo(f"Web copies:      {megabytes(GENERATED_FOLDER):.1f} MB in {GENERATED_FOLDER}")
     click.echo("Now commit and push the static/generated folder so the live site can use these smaller copies.")
+
+
+@lru_cache(maxsize=None)
+def static_version(filename):
+    """Short fingerprint of a CSS/JS file, so browsers and Vercel's CDN fetch the new copy after every change."""
+    try:
+        return hashlib.md5((STATIC_FOLDER / filename).read_bytes()).hexdigest()[:10]
+    except OSError:
+        return ""
+
+
+@app.url_defaults
+def add_static_version(endpoint, values):
+    filename = values.get("filename", "")
+    if endpoint == "static" and filename.endswith((".css", ".js")):
+        version = static_version(filename)
+        if version:
+            values["v"] = version
 
 
 @app.after_request
