@@ -358,10 +358,19 @@ def save_jpeg(image, target):
     os.replace(temporary, target)
 
 
+@lru_cache(maxsize=None)
+def file_fingerprint(path):
+    """Short fingerprint of a photo's contents, so a renamed or replaced photo never reuses an old generated copy."""
+    try:
+        return hashlib.md5(Path(path).read_bytes()).hexdigest()[:8]
+    except OSError:
+        return "0"
+
+
 def web_image(filename, size):
     """Static path of a resized, correctly rotated copy of an image, created on first use."""
     source = IMAGE_FOLDER / filename
-    target = GENERATED_FOLDER / f"{Path(filename).stem}-{size}.jpg"
+    target = GENERATED_FOLDER / f"{Path(filename).stem}-{size}-{file_fingerprint(source)}.jpg"
     try:
         if needs_build(target, source):
             GENERATED_FOLDER.mkdir(exist_ok=True)
@@ -382,7 +391,7 @@ def web_image(filename, size):
 def share_image(filename):
     """A 1200×630 crop for WhatsApp and social link previews."""
     source = IMAGE_FOLDER / filename
-    target = GENERATED_FOLDER / "share-preview.jpg"
+    target = GENERATED_FOLDER / f"share-preview-{file_fingerprint(source)}.jpg"
     try:
         if needs_build(target, source):
             GENERATED_FOLDER.mkdir(exist_ok=True)
@@ -401,7 +410,7 @@ def share_image(filename):
 def touch_icon(filename):
     """A square icon for phones' home screens and bookmarks."""
     source = IMAGE_FOLDER / filename
-    target = GENERATED_FOLDER / "touch-icon.png"
+    target = GENERATED_FOLDER / f"touch-icon-{file_fingerprint(source)}.png"
     try:
         if needs_build(target, source):
             GENERATED_FOLDER.mkdir(exist_ok=True)
@@ -419,17 +428,30 @@ def touch_icon(filename):
 
 def prepare_images():
     """Resize every photo ahead of time, so the first guest to open the link doesn't wait."""
+    keep = set()
+
+    def made(path):
+        if path:
+            keep.add(Path(path).name)
+
     couple = list_images("couple-")
     for name in couple:
-        web_image(name, "medium")
-        web_image(name, "large")
+        made(web_image(name, "medium"))
+        made(web_image(name, "large"))
     for group in FAMILY_GROUPS:
         for name in list_images(f"{group['id']}-"):
-            web_image(name, "thumb")
-            web_image(name, "large")
+            made(web_image(name, "thumb"))
+            made(web_image(name, "large"))
     if couple:
-        share_image(couple[0])
-        touch_icon(couple[0])
+        made(share_image(couple[0]))
+        made(touch_icon(couple[0]))
+    if not ON_VERCEL:  # remove copies of photos that were renamed, replaced or deleted
+        try:
+            for stale in GENERATED_FOLDER.iterdir():
+                if stale.is_file() and stale.suffix.lower() in {".jpg", ".png"} and stale.name not in keep:
+                    stale.unlink()
+        except OSError:
+            app.logger.exception("Could not clean up old generated images")
 
 
 def csrf_token():
