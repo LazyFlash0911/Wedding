@@ -26,7 +26,7 @@ pip install -r requirements.txt
 python app.py
 ```
 
-Open http://127.0.0.1:5000 in your browser. When the app starts it makes web-sized copies of the photos in `static/generated/` (a few seconds). While editing, run with `$env:FLASK_DEBUG = "1"` (Windows) or `FLASK_DEBUG=1` (macOS/Linux) so changes reload automatically.
+Open http://127.0.0.1:5000 in your browser. When the app starts it makes web-sized copies of the photos in `static/generated/`, including smaller versions for mobile phones (a few seconds). Run `flask --app app prepare-images` after adding or replacing photos so all generated sizes are ready to deploy. While editing, run with `$env:FLASK_DEBUG = "1"` (Windows) or `FLASK_DEBUG=1` (macOS/Linux) so changes reload automatically.
 
 The envelope intro shows once per browser session. To see it again, open the page in a new private window.
 

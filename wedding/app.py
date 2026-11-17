@@ -109,7 +109,7 @@ app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
 
 IST = timezone(timedelta(hours=5, minutes=30))
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".gif", ".webp"}
-IMAGE_SIZES = {"thumb": 600, "medium": 1100, "large": 1920}
+IMAGE_SIZES = {"mobile": 640, "thumb": 600, "medium": 1100, "large": 1920}
 
 WEDDING = {
     "partner_one": "Ankoosh Yadav",
@@ -436,10 +436,12 @@ def prepare_images():
 
     couple = list_images("couple-")
     for name in couple:
+        made(web_image(name, "mobile"))
         made(web_image(name, "medium"))
         made(web_image(name, "large"))
     for group in FAMILY_GROUPS:
         for name in list_images(f"{group['id']}-"):
+            made(web_image(name, "mobile"))
             made(web_image(name, "thumb"))
             made(web_image(name, "large"))
     if couple:
@@ -496,7 +498,11 @@ def get_family_groups():
     groups = []
     for group in FAMILY_GROUPS:
         photos = [
-            {"thumb": web_image(name, "thumb"), "large": web_image(name, "large")}
+            {
+                "mobile": web_image(name, "mobile"),
+                "thumb": web_image(name, "thumb"),
+                "large": web_image(name, "large"),
+            }
             for name in list_images(f"{group['id']}-")
         ]
         if photos:
@@ -520,6 +526,7 @@ def get_family_sides():
                 photos.append(
                     {
                         "src": url_for("static", filename=photo["large"]),
+                        "mobile": url_for("static", filename=photo["mobile"]),
                         "thumb": url_for("static", filename=photo["thumb"]),
                         "caption": caption,
                         "caption_hi": caption_hi,
@@ -538,6 +545,7 @@ def get_memories():
             {
                 "file": name,
                 "src": url_for("static", filename=web_image(name, "medium")),
+                "mobile": url_for("static", filename=web_image(name, "mobile")),
                 "large": url_for("static", filename=web_image(name, "large")),
                 "title": caption.get("title", ""),
                 "title_hi": caption.get("title_hi", ""),

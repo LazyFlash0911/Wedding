@@ -304,6 +304,7 @@
   // Full-screen photo viewer with keyboard and swipe support.
   const lightbox = document.getElementById("lightbox");
   const lightboxImage = document.getElementById("lightbox-image");
+  const lightboxMobileSource = document.getElementById("lightbox-mobile-source");
   const lightboxCaption = document.getElementById("lightbox-caption");
   const lightboxPrev = document.getElementById("lightbox-prev");
   const lightboxNext = document.getElementById("lightbox-next");
@@ -317,6 +318,7 @@
   function showLightboxItem(index) {
     lightboxIndex = (index + lightboxItems.length) % lightboxItems.length;
     const item = lightboxItems[lightboxIndex];
+    if (lightboxMobileSource) lightboxMobileSource.srcset = item.mobile || "";
     lightboxImage.src = item.src;
     lightboxImage.alt = captionFor(item);
     lightboxCaption.textContent = captionFor(item);
@@ -341,6 +343,7 @@
     lightbox.hidden = true;
     document.body.classList.remove("lightbox-open");
     lightboxImage.removeAttribute("src");
+    if (lightboxMobileSource) lightboxMobileSource.removeAttribute("srcset");
     if (lightboxReturnFocus) lightboxReturnFocus.focus();
   }
 
@@ -408,6 +411,7 @@
   const memoriesData = document.getElementById("memories-data");
   const memories = memoriesData ? JSON.parse(memoriesData.textContent) : [];
   const memoryImage = document.getElementById("gallery-image");
+  const memoryMobileSource = document.getElementById("gallery-mobile-source");
   const memoryFrame = document.getElementById("memory-open");
   const memoryPrev = document.getElementById("gallery-prev");
   const memoryNext = document.getElementById("gallery-next");
@@ -426,6 +430,7 @@
     document.getElementById("memory-text").textContent = memoryText(item, "caption");
     document.getElementById("memory-index").textContent =
       `${String(currentMemory + 1).padStart(2, "0")} / ${String(memories.length).padStart(2, "0")}`;
+    if (memoryMobileSource) memoryMobileSource.srcset = item.mobile;
     if (!memoryImage.src.endsWith(item.src)) {
       memoryImage.classList.remove("loaded");
       memoryImage.src = item.src;
@@ -445,6 +450,7 @@
     memoryFrame.addEventListener("click", () => {
       const items = memories.map((item) => ({
         src: item.large,
+        mobile: item.mobile,
         caption: [item.title, item.caption].filter(Boolean).join(" · "),
         captionHi: [item.title_hi, item.caption_hi].filter(Boolean).join(" · "),
       }));

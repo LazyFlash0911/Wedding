@@ -373,7 +373,7 @@
         <div class="family-sides">
           {% for side in family_sides %}
             <button class="family-side reveal" type="button" data-family-side="{{ loop.index0 }}" aria-haspopup="dialog">
-              <img class="family-side-cover" src="{{ side.cover }}" alt="" loading="lazy">
+              <img class="family-side-cover" src="{{ side.cover }}" alt="" loading="lazy" decoding="async">
               <span class="family-side-shade" aria-hidden="true"></span>
               <span class="family-side-text">
                 <span class="family-side-title" data-hi="{{ side.title_hi }}">{{ side.title }}</span>
@@ -396,7 +396,10 @@
           <button class="gallery-arrow" id="gallery-prev" type="button" aria-label="Previous memory" data-hi-aria-label="पिछली याद">←</button>
           <article class="memory-card" aria-live="polite">
             <button class="photo-frame" id="memory-open" type="button" aria-label="View photo full screen" data-hi-aria-label="तस्वीर बड़ी करके देखें">
-              <img id="gallery-image" src="{{ memories[0].src }}" alt="{{ memories[0].title or 'Ankoosh and Priyanka' }}">
+              <picture>
+                <source id="gallery-mobile-source" media="(max-width: 600px)" srcset="{{ memories[0].mobile }}">
+                <img id="gallery-image" src="{{ memories[0].src }}" alt="{{ memories[0].title or 'Ankoosh and Priyanka' }}" loading="lazy" decoding="async">
+              </picture>
             </button>
             <div class="memory-caption">
               <span class="memory-index" id="memory-index">01 / {{ '%02d' % (memories | length) }}</span>
@@ -536,7 +539,10 @@
     <button class="lightbox-close" id="lightbox-close" type="button" aria-label="Close" data-hi-aria-label="बंद करें">×</button>
     <button class="lightbox-arrow lightbox-prev" id="lightbox-prev" type="button" aria-label="Previous photo" data-hi-aria-label="पिछली तस्वीर">←</button>
     <figure class="lightbox-figure">
-      <img id="lightbox-image" alt="">
+      <picture>
+        <source id="lightbox-mobile-source" media="(max-width: 600px)">
+        <img id="lightbox-image" alt="" decoding="async">
+      </picture>
       <figcaption id="lightbox-caption"></figcaption>
       <span class="lightbox-count" id="lightbox-count"></span>
     </figure>
@@ -550,7 +556,10 @@
       <div class="fm-stage" id="fm-stage">
         <button class="fm-arrow fm-prev" id="fm-prev" type="button" aria-label="Previous photo" data-hi-aria-label="पिछली तस्वीर">←</button>
         <figure class="fm-figure">
-          <img id="fm-image" alt="">
+          <picture>
+            <source id="fm-mobile-source" media="(max-width: 600px)">
+            <img id="fm-image" alt="" decoding="async">
+          </picture>
           <figcaption id="fm-caption"></figcaption>
         </figure>
         <button class="fm-arrow fm-next" id="fm-next" type="button" aria-label="Next photo" data-hi-aria-label="अगली तस्वीर">→</button>
@@ -578,6 +587,7 @@
       try { sides = JSON.parse(dataEl.textContent) || []; } catch (error) { return; }
 
       var image = document.getElementById("fm-image");
+      var mobileSource = document.getElementById("fm-mobile-source");
       var caption = document.getElementById("fm-caption");
       var count = document.getElementById("fm-count");
       var title = document.getElementById("family-modal-title");
@@ -596,11 +606,15 @@
         title.textContent = isHindi() ? side.title_hi : side.title;
         caption.textContent = isHindi() ? (photo.caption_hi || photo.caption) : photo.caption;
         image.alt = caption.textContent;
+        mobileSource.srcset = photo.mobile;
         image.src = photo.src;
         count.textContent = (index + 1) + " / " + total;
         prev.hidden = next.hidden = total < 2;
         if (total > 1) {  // warm the cache for the neighbouring photos
-          [1, -1].forEach(function (step) { new Image().src = side.photos[(index + step + total) % total].src; });
+          [1, -1].forEach(function (step) {
+            var adjacent = side.photos[(index + step + total) % total];
+            new Image().src = window.matchMedia("(max-width: 600px)").matches ? adjacent.mobile : adjacent.src;
+          });
         }
       }
 
@@ -616,6 +630,7 @@
         modal.hidden = true;
         document.body.style.overflow = "";
         image.removeAttribute("src");
+        mobileSource.removeAttribute("srcset");
         if (opener) opener.focus();
       }
 
