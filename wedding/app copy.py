@@ -82,9 +82,9 @@ IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".gif", ".webp"}
 IMAGE_SIZES = {"thumb": 600, "medium": 1100, "large": 1920}
 
 WEDDING = {
-    "partner_one": "Ankoosh Yadav",
+    "partner_one": "Priyanka Yadav",
     "partner_one_hi": "अंकुश यादव",
-    "partner_two": "Priyanka Yadav",
+    "partner_two": "Ankoosh Yadav",
     "partner_two_hi": "प्रियंका यादव",
     "date_text": "Wednesday, 9 December 2026",
     "date_text_hi": "बुधवार, 9 दिसंबर 2026",
@@ -142,7 +142,7 @@ EVENTS = [
     },
     {
         "id": "groom-haldi",
-        "name": "Ankoosh's Haldi",
+        "name": "Priyanka's Haldi",
         "name_hi": "अंकुश की हल्दी",
         "subtitle": "A golden beginning for the groom",
         "subtitle_hi": "दूल्हे के लिए एक सुनहरी शुरुआत",
@@ -154,7 +154,7 @@ EVENTS = [
         "end": datetime(2026, 12, 8, 22, 0, tzinfo=IST),
         "venue": "club-aquaria",
         "icon": "✿",
-        "description": "Traditional rituals, joyful blessings, and happy moments with Ankoosh's loved ones.",
+        "description": "Traditional rituals, joyful blessings, and happy moments with Priyanka's loved ones.",
         "description_hi": "अंकुश के अपनों के साथ पारंपरिक रस्में, आशीर्वाद और खुशियों भरे पल।",
         "dress_code": "Shades of yellow: wear something you don't mind getting haldi on",
         "dress_code_hi": "पीले रंग के परिधान: ऐसे कपड़े पहनें जिन पर हल्दी लग जाए तो चिंता न हो",
@@ -162,7 +162,7 @@ EVENTS = [
     },
     {
         "id": "bride-haldi",
-        "name": "Priyanka's Haldi",
+        "name": "Ankoosh's Haldi",
         "name_hi": "प्रियंका की हल्दी",
         "subtitle": "A golden beginning for the bride",
         "subtitle_hi": "दुल्हन के लिए एक सुनहरी शुरुआत",
@@ -174,7 +174,7 @@ EVENTS = [
         "end": datetime(2026, 12, 9, 12, 0, tzinfo=IST),
         "venue": "sai-palace",
         "icon": "✿",
-        "description": "A beautiful morning of flowers, traditional rituals, and family blessings for Priyanka.",
+        "description": "A beautiful morning of flowers, traditional rituals, and family blessings for Ankoosh.",
         "description_hi": "प्रियंका के लिए फूलों, पारंपरिक रस्मों और परिवार के आशीर्वाद से सजी एक सुंदर सुबह।",
         "dress_code": "Shades of yellow: wear something you don't mind getting haldi on",
         "dress_code_hi": "पीले रंग के परिधान: ऐसे कपड़े पहनें जिन पर हल्दी लग जाए तो चिंता न हो",
@@ -432,7 +432,7 @@ def google_calendar_url(event):
     return "https://calendar.google.com/calendar/render?" + urlencode(
         {
             "action": "TEMPLATE",
-            "text": f"{event['name']} · Ankoosh & Priyanka",
+            "text": f"{event['name']} · Priyanka & Ankoosh",
             "dates": f"{utc_stamp(event['start'])}/{utc_stamp(event['end'])}",
             "details": event["description"],
             "location": venue["address"],
@@ -668,7 +668,7 @@ def event_calendar(event_id):
     lines = [
         "BEGIN:VCALENDAR",
         "VERSION:2.0",
-        "PRODID:-//Ankoosh & Priyanka//Wedding Invitation//EN",
+        "PRODID:-//Priyanka & Ankoosh//Wedding Invitation//EN",
         "CALSCALE:GREGORIAN",
         "METHOD:PUBLISH",
         "BEGIN:VEVENT",
@@ -676,7 +676,7 @@ def event_calendar(event_id):
         f"DTSTAMP:{utc_stamp(datetime.now(timezone.utc))}",
         f"DTSTART:{utc_stamp(event['start'])}",
         f"DTEND:{utc_stamp(event['end'])}",
-        f"SUMMARY:{ics_escape(event['name'] + ' · Ankoosh & Priyanka')}",
+        f"SUMMARY:{ics_escape(event['name'] + ' · Priyanka & Ankoosh')}",
         f"LOCATION:{ics_escape(venue['address'])}",
         f"DESCRIPTION:{ics_escape(event['description'])}",
         "END:VEVENT",

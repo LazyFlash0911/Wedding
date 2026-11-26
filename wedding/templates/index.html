@@ -22,18 +22,18 @@
   <meta name="robots" content="noindex, nofollow">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Ccircle cx='32' cy='32' r='30' fill='%23a45f70'/%3E%3Ctext x='32' y='42' font-family='Georgia,serif' font-size='26' fill='%23fff0df' text-anchor='middle'%3EP%E2%99%A5A%3C/text%3E%3C/svg%3E">
   {% if touch_icon_url %}<link rel="apple-touch-icon" href="{{ touch_icon_url }}">{% endif %}
-  <title>Ankoosh & Priyanka — A Wedding Invitation</title>
-  <meta name="description" content="You're invited to the wedding of Ankoosh Yadav and Priyanka Yadav · 9 December 2026 · Mumbai.">
+  <title>Priyanka & Ankoosh — A Wedding Invitation</title>
+  <meta name="description" content="You're invited to the wedding of Priyanka Yadav and Ankoosh Yadav · 9 December 2026 · Mumbai.">
 
   <meta property="og:type" content="website">
   <meta property="og:url" content="{{ page_url }}">
-  <meta property="og:title" content="Ankoosh & Priyanka are getting married ♥">
+  <meta property="og:title" content="Priyanka & Ankoosh are getting married ♥">
   <meta property="og:description" content="Join us for the Sangeet, Haldi and Wedding · 7–9 December 2026 · Mumbai.">
   {% if preview_image_url %}
   <meta property="og:image" content="{{ preview_image_url }}">
   <meta property="og:image:width" content="1200">
   <meta property="og:image:height" content="630">
-  <meta property="og:image:alt" content="Ankoosh and Priyanka">
+  <meta property="og:image:alt" content="Priyanka and Ankoosh">
   <meta name="twitter:card" content="summary_large_image">
   {% endif %}
 
@@ -118,14 +118,14 @@
         <span id="open-label" data-hi="अपना निमंत्रण खोलें">Open your invitation</span>
         <span class="button-arrow" aria-hidden="true">↗</span>
       </button>
-      <p class="tiny-note" data-hi="अंकुश और प्रियंका की ओर से, ढेर सारे प्यार के साथ">Made with love by Ankoosh & Priyanka</p>
+      <p class="tiny-note" data-hi="अंकुश और प्रियंका की ओर से, ढेर सारे प्यार के साथ">Made with love by Priyanka & Ankoosh</p>
     </div>
     <div class="envelope-stage" aria-hidden="true">
       <div class="envelope">
         <div class="envelope-back"></div>
         <div class="envelope-letter">
           <span class="letter-top" data-hi="अपने परिवारों के साथ">TOGETHER WITH OUR FAMILIES</span>
-          <span class="letter-names foil" data-hi-html="अंकुश <i>&amp;</i><br>प्रियंका">Ankoosh <i>&</i><br>Priyanka</span>
+          <span class="letter-names foil" data-hi-html="अंकुश <i>&amp;</i><br>प्रियंका">Priyanka <i>&</i><br>Ankoosh</span>
           <span class="letter-date">09 · 12 · 2026</span>
           <span class="letter-flower">✿</span>
         </div>
@@ -140,7 +140,7 @@
 
   <div class="page">
     <header class="nav">
-      <a class="brand" href="#top" aria-label="Ankoosh and Priyanka, back to top">A <span>✿</span> P</a>
+      <a class="brand" href="#top" aria-label="Priyanka and Ankoosh, back to top">A <span>✿</span> P</a>
       <nav class="nav-links" id="nav-links" aria-label="Sections">
         <a href="#our-story" data-hi="हमारी कहानी">Our story</a>
         <a href="#celebrations" data-hi="उत्सव">Celebrations</a>
@@ -315,7 +315,7 @@
             <button class="photo-frame" id="memory-open" type="button" aria-label="View photo full screen" data-hi-aria-label="तस्वीर बड़ी करके देखें">
               <picture>
                 <source id="gallery-mobile-source" media="(max-width: 600px)" srcset="{{ memories[0].mobile }}">
-                <img id="gallery-image" src="{{ memories[0].src }}" alt="{{ memories[0].title or 'Ankoosh and Priyanka' }}" loading="lazy" decoding="async">
+                <img id="gallery-image" src="{{ memories[0].src }}" alt="{{ memories[0].title or 'Priyanka and Ankoosh' }}" loading="lazy" decoding="async">
               </picture>
             </button>
             <div class="memory-caption">
@@ -418,7 +418,7 @@
 
     <footer>
       {{ divider() }}
-      <p data-hi="प्यार सहित, अंकुश और प्रियंका">With love, Ankoosh & Priyanka</p>
+      <p data-hi="प्यार सहित, अंकुश और प्रियंका">With love, Priyanka & Ankoosh</p>
       <small data-hi="09 दिसंबर 2026 · एक यादगार दिन, हमेशा रहने वाला प्यार।">09 December 2026 · A day to remember, a love to last forever.</small>
       <button class="footer-share share-button" type="button">
         <span aria-hidden="true">↗</span> <span data-hi="यह निमंत्रण साझा करें">Share this invitation</span>
@@ -489,8 +489,8 @@
   <script type="application/json" id="memories-data">{{ memories | tojson }}</script>
   <script type="application/json" id="share-data">{{ {
     "url": page_url,
-    "title": "Ankoosh & Priyanka — Wedding Invitation",
-    "en": "Ankoosh & Priyanka are getting married! 💍 Sangeet, Haldi & Wedding · 7–9 December 2026, Mumbai. Open the invitation:",
+    "title": "Priyanka & Ankoosh — Wedding Invitation",
+    "en": "Priyanka & Ankoosh are getting married! 💍 Sangeet, Haldi & Wedding · 7–9 December 2026, Mumbai. Open the invitation:",
     "hi": "अंकुश और प्रियंका की शादी है! 💍 संगीत, हल्दी और विवाह · 7–9 दिसंबर 2026, मुंबई। निमंत्रण देखें:"
   } | tojson }}</script>
   <script src="{{ url_for('static', filename='script.js') }}"></script>

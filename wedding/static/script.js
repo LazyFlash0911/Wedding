@@ -435,7 +435,7 @@
       memoryImage.classList.remove("loaded");
       memoryImage.src = item.src;
     }
-    memoryImage.alt = memoryText(item, "title") || "Priyanka and Ankoosh";
+    memoryImage.alt = memoryText(item, "title") || "Ankoosh and Priyanka";
     memoryPrev.disabled = currentMemory === 0;
     memoryNext.disabled = currentMemory === memories.length - 1;
     memoryDots.forEach((dot, i) => dot.classList.toggle("active", i === currentMemory));
